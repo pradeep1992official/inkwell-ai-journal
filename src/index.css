@@ -1,0 +1,447 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Outfit', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-serif: Georgia, Cambria, 'Times New Roman', Times, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+@layer base {
+  :root {
+    --font-display: 'Outfit', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-serif: Georgia, Cambria, 'Times New Roman', Times, serif;
+    --font-journal: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+    /* Base Font Sizing */
+    --base-font-size: 16px;
+    --editor-font-size: 1rem;
+
+    /* Theme 1: Light (Default) */
+    --bg-app: #F8FAFD;
+    --bg-surface: #FFFFFF;
+    --bg-subtle: #F0F4F9;
+    --bg-hover: #E8EEF6;
+    --border-color: #E3E8EF;
+    --border-focus: #1A73E8;
+    --text-primary: #1F1F1F;
+    --text-secondary: #5E5E5E;
+    --text-muted: #8E918F;
+    --accent-primary: #1A73E8;
+    --accent-hover: #1557B0;
+    --accent-light: #E8F0FE;
+    --accent-text: #FFFFFF;
+    --pill-bg: #E8F0FE;
+    --pill-text: #1A73E8;
+  }
+
+  /* Tamil Specific Font Pairing (Noto Serif Tamil for headings/journal, Noto Sans Tamil for UI) */
+  html[lang="ta"],
+  html[data-language="ta"],
+  :root:lang(ta),
+  :lang(ta) {
+    --font-display: 'Noto Serif Tamil', 'Outfit', serif, sans-serif;
+    --font-sans: 'Noto Sans Tamil', 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-serif: 'Noto Serif Tamil', Georgia, serif;
+    --font-journal: 'Noto Serif Tamil', 'Noto Sans Tamil', serif;
+  }
+
+  /* Hindi / Devanagari Specific Font Pairing (Noto Serif Devanagari for headings/journal, Noto Sans Devanagari for UI) */
+  html[lang="hi"],
+  html[data-language="hi"],
+  :root:lang(hi),
+  :lang(hi) {
+    --font-display: 'Noto Serif Devanagari', 'Outfit', serif, sans-serif;
+    --font-sans: 'Noto Sans Devanagari', 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-serif: 'Noto Serif Devanagari', Georgia, serif;
+    --font-journal: 'Noto Serif Devanagari', 'Noto Sans Devanagari', serif;
+  }
+
+  /* Universal font and element inheritance */
+  *, ::before, ::after {
+    font-family: inherit;
+  }
+
+  input, button, textarea, select {
+    font-family: inherit;
+    font-feature-settings: inherit;
+    font-variation-settings: inherit;
+  }
+
+  /* Font scaling rules across app */
+  html[data-font-size="small"] {
+    font-size: 14.5px;
+    --editor-font-size: 0.925rem;
+  }
+
+  html[data-font-size="medium"] {
+    font-size: 16px;
+    --editor-font-size: 1rem;
+  }
+
+  html[data-font-size="large"] {
+    font-size: 17.5px;
+    --editor-font-size: 1.125rem;
+  }
+
+  /* 1. Light Theme */
+  html[data-theme="light"] {
+    color-scheme: light;
+    --bg-app: #F8FAFD;
+    --bg-surface: #FFFFFF;
+    --bg-subtle: #F0F4F9;
+    --bg-hover: #E3E8EF;
+    --border-color: #E3E8EF;
+    --border-focus: #1A73E8;
+    --text-primary: #1F1F1F;
+    --text-secondary: #5E5E5E;
+    --text-muted: #8E918F;
+    --accent-primary: #1A73E8;
+    --accent-hover: #1557B0;
+    --accent-light: #E8F0FE;
+    --accent-text: #FFFFFF;
+  }
+
+  /* 2. Dark Theme */
+  html[data-theme="dark"] {
+    color-scheme: dark;
+    --bg-app: #1A1614;
+    --bg-surface: #241F1C;
+    --bg-subtle: #2C2622;
+    --bg-hover: #362F2A;
+    --border-color: #38302A;
+    --border-focus: #E8A33D;
+    --text-primary: #EDE5DB;
+    --text-secondary: #A89E92;
+    --text-muted: #7A7268;
+    --accent-primary: #E8A33D;
+    --accent-hover: #D9932E;
+    --accent-light: #382B1B;
+    --accent-text: #171310;
+  }
+
+  /* 3. Paper Theme */
+  html[data-theme="paper"] {
+    color-scheme: light;
+    --bg-app: #FAF6EF;
+    --bg-surface: #FFFDF8;
+    --bg-subtle: #F2EADA;
+    --bg-hover: #E8DEC8;
+    --border-color: #E6DCBA;
+    --border-focus: #B8722E;
+    --text-primary: #2D2824;
+    --text-secondary: #7A6E62;
+    --text-muted: #9E9183;
+    --accent-primary: #B8722E;
+    --accent-hover: #9E5F24;
+    --accent-light: #F7EAD9;
+    --accent-text: #FFFFFF;
+  }
+
+  /* 4. Vellum Theme */
+  html[data-theme="vellum"] {
+    color-scheme: light;
+    --bg-app: #EFE6D8;
+    --bg-surface: #F8F3EA;
+    --bg-subtle: #E5DAC9;
+    --bg-hover: #DACFBD;
+    --border-color: #D6C7B2;
+    --border-focus: #A8623B;
+    --text-primary: #4A3B2C;
+    --text-secondary: #7D6B58;
+    --text-muted: #9C8873;
+    --accent-primary: #A8623B;
+    --accent-hover: #8F502E;
+    --accent-light: #F2E4D5;
+    --accent-text: #FFFFFF;
+  }
+
+  /* 5. Vivid Theme */
+  html[data-theme="vivid"] {
+    color-scheme: light;
+    --bg-app: #F5F3FF;
+    --bg-surface: #FFFFFF;
+    --bg-subtle: #EDE9FE;
+    --bg-hover: #DDD6FE;
+    --border-color: #DDD6FE;
+    --border-focus: #7C5CFF;
+    --text-primary: #1E1B4B;
+    --text-secondary: #5B21B6;
+    --text-muted: #8B5CF6;
+    --accent-primary: #7C5CFF;
+    --accent-hover: #6340E8;
+    --accent-light: #EDE9FE;
+    --accent-text: #FFFFFF;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    font-size: var(--base-font-size);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  }
+}
+
+.font-gemini-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+.font-gemini-sans {
+  font-family: var(--font-sans);
+}
+
+.font-journal-entry,
+.journal-entry-text {
+  font-family: var(--font-journal);
+}
+
+/* Tamil Typography Rules (Noto Serif Tamil for headings/reflections, Noto Sans Tamil for UI) */
+html[lang="ta"] .font-gemini-display,
+html[data-language="ta"] .font-gemini-display {
+  font-family: 'Noto Serif Tamil', 'Outfit', serif, sans-serif;
+}
+
+html[lang="ta"] .font-gemini-sans,
+html[data-language="ta"] .font-gemini-sans,
+html[lang="ta"] button,
+html[lang="ta"] input,
+html[lang="ta"] textarea,
+html[lang="ta"] select,
+html[data-language="ta"] button,
+html[data-language="ta"] input,
+html[data-language="ta"] textarea,
+html[data-language="ta"] select {
+  font-family: 'Noto Sans Tamil', 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+html[lang="ta"] .prose-reflection,
+html[data-language="ta"] .prose-reflection,
+html[lang="ta"] .journal-entry-text,
+html[data-language="ta"] .journal-entry-text {
+  font-family: 'Noto Serif Tamil', 'Noto Sans Tamil', serif;
+  line-height: 1.75;
+}
+
+html[lang="ta"] .prose-reflection h1,
+html[lang="ta"] .prose-reflection h2,
+html[lang="ta"] .prose-reflection h3,
+html[lang="ta"] .prose-reflection h4,
+html[data-language="ta"] .prose-reflection h1,
+html[data-language="ta"] .prose-reflection h2,
+html[data-language="ta"] .prose-reflection h3,
+html[data-language="ta"] .prose-reflection h4 {
+  font-family: 'Noto Serif Tamil', serif;
+}
+
+/* Hindi / Devanagari Typography Rules (Noto Serif Devanagari for headings/reflections, Noto Sans Devanagari for UI) */
+html[lang="hi"] .font-gemini-display,
+html[data-language="hi"] .font-gemini-display {
+  font-family: 'Noto Serif Devanagari', 'Outfit', serif, sans-serif;
+}
+
+html[lang="hi"] .font-gemini-sans,
+html[data-language="hi"] .font-gemini-sans,
+html[lang="hi"] button,
+html[lang="hi"] input,
+html[lang="hi"] textarea,
+html[lang="hi"] select,
+html[data-language="hi"] button,
+html[data-language="hi"] input,
+html[data-language="hi"] textarea,
+html[data-language="hi"] select {
+  font-family: 'Noto Sans Devanagari', 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+html[lang="hi"] .prose-reflection,
+html[data-language="hi"] .prose-reflection,
+html[lang="hi"] .journal-entry-text,
+html[data-language="hi"] .journal-entry-text {
+  font-family: 'Noto Serif Devanagari', 'Noto Sans Devanagari', serif;
+  line-height: 1.75;
+}
+
+html[lang="hi"] .prose-reflection h1,
+html[lang="hi"] .prose-reflection h2,
+html[lang="hi"] .prose-reflection h3,
+html[lang="hi"] .prose-reflection h4,
+html[data-language="hi"] .prose-reflection h1,
+html[data-language="hi"] .prose-reflection h2,
+html[data-language="hi"] .prose-reflection h3,
+html[data-language="hi"] .prose-reflection h4 {
+  font-family: 'Noto Serif Devanagari', serif;
+}
+
+/* Custom Theme Utility Classes */
+.theme-bg-app { background-color: var(--bg-app); }
+.theme-bg-surface { background-color: var(--bg-surface); }
+.theme-bg-subtle { background-color: var(--bg-subtle); }
+.theme-bg-hover:hover { background-color: var(--bg-hover); }
+.theme-border { border-color: var(--border-color); }
+.theme-text-primary { color: var(--text-primary); }
+.theme-text-secondary { color: var(--text-secondary); }
+.theme-text-muted { color: var(--text-muted); }
+.theme-accent-bg { background-color: var(--accent-primary); }
+.theme-accent-hover:hover { background-color: var(--accent-hover); }
+.theme-accent-text { color: var(--accent-primary); }
+
+/* Markdown & Prose Styling for Gemini AI Output */
+.prose-reflection {
+  font-family: var(--font-sans);
+  font-size: var(--editor-font-size, 1rem);
+  line-height: 1.68;
+}
+
+.prose-reflection p {
+  margin-bottom: 0.85rem;
+}
+
+.prose-reflection p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-reflection h1,
+.prose-reflection h2,
+.prose-reflection h3,
+.prose-reflection h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose-reflection h1 { font-size: 1.35em; }
+.prose-reflection h2 { font-size: 1.2em; }
+.prose-reflection h3 { font-size: 1.1em; }
+
+.prose-reflection ul,
+.prose-reflection ol {
+  margin-left: 1.25rem;
+  margin-bottom: 0.85rem;
+  padding-left: 0.25rem;
+}
+
+.prose-reflection ul {
+  list-style-type: disc;
+}
+
+.prose-reflection ol {
+  list-style-type: decimal;
+}
+
+.prose-reflection li {
+  margin-bottom: 0.35rem;
+  line-height: 1.6;
+}
+
+.prose-reflection strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.prose-reflection em {
+  font-style: italic;
+}
+
+.prose-reflection blockquote {
+  border-left: 3px solid var(--accent-primary);
+  padding-left: 0.85rem;
+  margin: 0.85rem 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.prose-reflection code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  padding: 0.15em 0.35em;
+  border-radius: 0.375rem;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+}
+
+.prose-reflection pre {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  overflow-x: auto;
+  margin: 0.85rem 0;
+}
+
+/* Gemini Signature Gradient Text */
+.gemini-gradient-text {
+  background: linear-gradient(135deg, #1A73E8 0%, #8E24AA 50%, #E91E63 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+html[data-theme="dark"] .gemini-gradient-text {
+  background: linear-gradient(135deg, #E8A33D 0%, #F59E0B 50%, #EF4444 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+html[data-theme="paper"] .gemini-gradient-text {
+  background: linear-gradient(135deg, #B8722E 0%, #C2671A 60%, #8C4717 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+html[data-theme="vellum"] .gemini-gradient-text {
+  background: linear-gradient(135deg, #A8623B 0%, #944C27 60%, #6E3316 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+html[data-theme="vivid"] .gemini-gradient-text {
+  background: linear-gradient(135deg, #7C5CFF 0%, #FF6B6B 50%, #FF9F43 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Gemini Multi-Color Glow / Border */
+.gemini-gradient-border {
+  background: linear-gradient(#ffffff, #ffffff) padding-box,
+              linear-gradient(135deg, #4285F4, #9B72CF, #D96570) border-box;
+  border: 1.5px solid transparent;
+}
+
+html[data-theme="dark"] .gemini-gradient-border {
+  background: linear-gradient(#241F1C, #241F1C) padding-box,
+              linear-gradient(135deg, #E8A33D, #F59E0B, #EF4444) border-box;
+  border: 1.5px solid transparent;
+}
+
+/* Clean Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 100, 100, 0.2);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 100, 100, 0.35);
+}

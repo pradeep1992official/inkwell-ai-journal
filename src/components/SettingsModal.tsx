@@ -1,0 +1,680 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  X, 
+  Palette, 
+  Type, 
+  Globe, 
+  Check, 
+  ShieldCheck, 
+  Settings as SettingsIcon, 
+  Cloud,
+  Moon,
+  Sun,
+  Clock,
+  Lock,
+  Timer,
+  HeartHandshake,
+  Download,
+  Upload,
+  ExternalLink,
+  KeyRound,
+  AlertCircle,
+  Trash2
+} from 'lucide-react';
+import { usePreferences } from '../context/PreferencesContext';
+import { AppTheme, AppFontSize, AppLanguage, JournalEntry } from '../types';
+import { hashPin } from '../lib/lockService';
+import { DeleteAccountModal } from './DeleteAccountModal';
+import { ImportDataModal } from './ImportDataModal';
+
+interface SettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  userId?: string | null;
+  userEmail?: string | null;
+  entries?: JournalEntry[];
+  onOpenExport?: () => void;
+  onOpenImport?: () => void;
+}
+
+export const SettingsModal: React.FC<SettingsModalProps> = ({
+  isOpen,
+  onClose,
+  userId,
+  userEmail,
+  entries = [],
+  onOpenExport,
+  onOpenImport,
+}) => {
+  const { 
+    theme, 
+    setTheme, 
+    themeMode,
+    setThemeMode,
+    fontSize, 
+    setFontSize, 
+    language, 
+    setLanguage, 
+    lockSettings,
+    updateLockSettings,
+    t,
+    isSavingPrefs 
+  } = usePreferences();
+
+  const [pinInput, setPinInput] = useState('');
+  const [pinConfirm, setPinConfirm] = useState('');
+  const [isSettingPin, setIsSettingPin] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pinSuccess, setPinSuccess] = useState(false);
+  const [deleteAccountModalOpen, setDeleteAccountModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const themesList: Array<{
+    id: AppTheme;
+    name: string;
+    bg: string;
+    accent: string;
+    text: string;
+    border: string;
+  }> = [
+    {
+      id: 'light',
+      name: t.themeLight,
+      bg: '#F8FAFD',
+      accent: '#1A73E8',
+      text: '#1F1F1F',
+      border: '#E3E8EF',
+    },
+    {
+      id: 'dark',
+      name: t.themeDark,
+      bg: '#1A1614',
+      accent: '#E8A33D',
+      text: '#EDE5DB',
+      border: '#38302A',
+    },
+    {
+      id: 'paper',
+      name: t.themePaper,
+      bg: '#FAF6EF',
+      accent: '#B8722E',
+      text: '#2D2824',
+      border: '#E6DCBA',
+    },
+    {
+      id: 'vellum',
+      name: t.themeVellum,
+      bg: '#EFE6D8',
+      accent: '#A8623B',
+      text: '#4A3B2C',
+      border: '#D6C7B2',
+    },
+    {
+      id: 'vivid',
+      name: t.themeVivid,
+      bg: '#F5F3FF',
+      accent: '#7C5CFF',
+      text: '#1E1B4B',
+      border: '#DDD6FE',
+    },
+  ];
+
+  const fontSizesList: Array<{
+    id: AppFontSize;
+    name: string;
+    sizeClass: string;
+  }> = [
+    { id: 'small', name: t.fontSmall, sizeClass: 'text-xs' },
+    { id: 'medium', name: t.fontMedium, sizeClass: 'text-sm' },
+    { id: 'large', name: t.fontLarge, sizeClass: 'text-base' },
+  ];
+
+  const languagesList: Array<{
+    id: AppLanguage;
+    name: string;
+    nativeName: string;
+  }> = [
+    { id: 'en', name: 'English', nativeName: 'English' },
+    { id: 'es', name: 'Spanish', nativeName: 'Español' },
+    { id: 'fr', name: 'French', nativeName: 'Français' },
+    { id: 'hi', name: 'Hindi', nativeName: 'हिन्दी' },
+    { id: 'ta', name: 'Tamil', nativeName: 'தமிழ்' },
+  ];
+
+  const timeoutOptions: Array<{ minutes: number; label: string }> = [
+    { minutes: 1, label: t.timeout1Min },
+    { minutes: 5, label: t.timeout5Min },
+    { minutes: 15, label: t.timeout15Min },
+    { minutes: 30, label: t.timeout30Min },
+    { minutes: 0, label: t.timeoutNever },
+  ];
+
+  const handleSaveNewPin = async () => {
+    setPinError(null);
+    if (!/^\d{4}$/.test(pinInput)) {
+      setPinError('PIN must be exactly 4 numeric digits');
+      return;
+    }
+    if (pinInput !== pinConfirm) {
+      setPinError(t.pinMismatch);
+      return;
+    }
+
+    try {
+      const pinHash = await hashPin(pinInput);
+      await updateLockSettings({
+        enabled: true,
+        pinHash,
+      });
+      setPinSuccess(true);
+      setIsSettingPin(false);
+      setPinInput('');
+      setPinConfirm('');
+      setTimeout(() => setPinSuccess(false), 3000);
+    } catch {
+      setPinError('Failed to hash and save PIN.');
+    }
+  };
+
+  const handleToggleLockEnabled = () => {
+    if (lockSettings.enabled) {
+      updateLockSettings({ enabled: false });
+    } else {
+      if (!lockSettings.pinHash) {
+        setIsSettingPin(true);
+      } else {
+        updateLockSettings({ enabled: true });
+      }
+    }
+  };
+
+  return (
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div 
+        className="w-full max-w-lg theme-bg-surface border theme-border rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-left animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-6 py-4 border-b theme-border flex items-center justify-between theme-bg-subtle">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#1A73E8] via-[#7B1FA2] to-[#E91E63] flex items-center justify-center text-white shadow-xs">
+              <SettingsIcon className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-gemini-display font-bold text-sm theme-text-primary">
+                {t.settingsTitle}
+              </h3>
+              <p className="text-[11px] theme-text-secondary">
+                {t.settingsSubtitle}
+              </p>
+            </div>
+          </div>
+
+          <button
+            id="btn-settings-close"
+            onClick={onClose}
+            className="p-1.5 rounded-full theme-text-secondary hover:theme-text-primary hover:theme-bg-hover transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Content Body */}
+        <div className="p-6 overflow-y-auto space-y-6 flex-1 min-h-0 text-left">
+          {/* Section 1: Themes */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold theme-text-secondary uppercase tracking-wider">
+                <Palette className="w-3.5 h-3.5 theme-accent-text" />
+                <span>{t.themeSection}</span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border theme-border theme-text-secondary">
+                  {themeMode === 'auto' ? `Auto: ${theme === 'dark' ? 'Dark (Night)' : 'Light (Day)'}` : 'Custom Palette'}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] theme-text-secondary mb-3 leading-relaxed">
+              {t.themeSectionDesc}
+            </p>
+
+            {/* Auto Theme Switcher Card */}
+            <div className="p-3 mb-3 rounded-2xl border theme-border theme-bg-subtle/60 flex items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-xl bg-blue-500/10 dark:bg-amber-500/10 flex items-center justify-center text-[#1A73E8] dark:text-[#E8A33D] shrink-0 mt-0.5">
+                  <Clock className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold theme-text-primary leading-tight flex items-center gap-1.5">
+                    <span>{t.themeModeAuto}</span>
+                  </div>
+                  <div className="text-[10px] theme-text-secondary mt-0.5 leading-tight">
+                    {t.themeModeAutoDesc} (Light: 6 AM – 6 PM, Dark: 6 PM – 6 AM)
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                id="btn-toggle-auto-theme"
+                onClick={() => {
+                  if (themeMode === 'auto') {
+                    setThemeMode('manual');
+                  } else {
+                    setThemeMode('auto');
+                  }
+                }}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  themeMode === 'auto'
+                    ? 'bg-[#1A73E8] dark:bg-[#E8A33D]'
+                    : 'bg-black/20 dark:bg-white/20'
+                }`}
+                role="switch"
+                aria-checked={themeMode === 'auto'}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                    themeMode === 'auto' ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {themesList.map((th) => {
+                const isSelected = theme === th.id && themeMode === 'manual';
+                return (
+                  <button
+                    key={th.id}
+                    id={`btn-theme-${th.id}`}
+                    onClick={() => {
+                      setTheme(th.id);
+                    }}
+                    className={`px-3 py-2 rounded-xl border text-left transition-all flex items-center justify-between ${
+                      isSelected
+                        ? 'border-[#1A73E8] dark:border-[#E8A33D] ring-1 ring-[#1A73E8]/30 dark:ring-[#E8A33D]/30 shadow-xs'
+                        : 'border-black/10 dark:border-white/10 hover:opacity-90'
+                    }`}
+                    style={{ backgroundColor: th.bg, color: th.text }}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span 
+                        className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/15 shadow-2xs"
+                        style={{ backgroundColor: th.accent }}
+                      />
+                      <span className="font-semibold text-xs truncate">
+                        {th.name}
+                      </span>
+                    </div>
+                    {isSelected && (
+                      <Check className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" style={{ color: th.accent }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Section 2: App Lock & Privacy */}
+          <div className="pt-4 border-t theme-border">
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold theme-text-secondary uppercase tracking-wider">
+                <Lock className="w-3.5 h-3.5 theme-accent-text" />
+                <span>{t.appLockTitle}</span>
+              </div>
+
+              <button
+                type="button"
+                id="btn-toggle-app-lock"
+                onClick={handleToggleLockEnabled}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                  lockSettings.enabled
+                    ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                    : 'bg-[#1A73E8] dark:bg-[#E8A33D] text-white dark:text-[#171310]'
+                }`}
+              >
+                {lockSettings.enabled ? 'Disable Lock' : t.enableAppLock}
+              </button>
+            </div>
+
+            <p className="text-[11px] theme-text-secondary mb-3 leading-relaxed">
+              {t.appLockDesc}
+            </p>
+
+            {pinSuccess && (
+              <div className="p-3 mb-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-500" />
+                <span>{t.reauthSuccess}</span>
+              </div>
+            )}
+
+            {/* PIN Setup Dialog Form */}
+            {isSettingPin && (
+              <div className="p-4 rounded-2xl theme-bg-subtle border theme-border mb-3 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-bold theme-text-primary">
+                  <KeyRound className="w-4 h-4 theme-accent-text" />
+                  <span>{t.setPinCode}</span>
+                </div>
+
+                {pinError && (
+                  <p className="text-xs text-rose-500 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    {pinError}
+                  </p>
+                )}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] theme-text-secondary block mb-1">{t.enterPinCode}</label>
+                    <input
+                      type="password"
+                      maxLength={4}
+                      placeholder="••••"
+                      value={pinInput}
+                      onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                      className="w-full text-center font-mono text-sm py-1.5 px-2 rounded-xl theme-bg-surface border theme-border theme-text-primary focus:outline-none focus:border-[#1A73E8]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] theme-text-secondary block mb-1">{t.confirmPinCode}</label>
+                    <input
+                      type="password"
+                      maxLength={4}
+                      placeholder="••••"
+                      value={pinConfirm}
+                      onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, ''))}
+                      className="w-full text-center font-mono text-sm py-1.5 px-2 rounded-xl theme-bg-surface border theme-border theme-text-primary focus:outline-none focus:border-[#1A73E8]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSettingPin(false);
+                      setPinInput('');
+                      setPinConfirm('');
+                      setPinError(null);
+                    }}
+                    className="px-3 py-1 rounded-full text-xs theme-text-secondary hover:theme-text-primary"
+                  >
+                    {t.cancel}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveNewPin}
+                    className="px-4 py-1.5 rounded-full bg-[#1A73E8] hover:bg-[#1557B0] dark:bg-[#E8A33D] dark:hover:bg-[#D9932E] text-white dark:text-[#171310] text-xs font-bold"
+                  >
+                    Save PIN
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {lockSettings.enabled && (
+              <div className="space-y-3 pt-2">
+                {/* Inactivity Timeout Dropdown */}
+                <div className="flex items-center justify-between p-3 rounded-2xl theme-bg-subtle border theme-border">
+                  <div className="flex items-center gap-2 text-xs font-semibold theme-text-primary">
+                    <Timer className="w-4 h-4 theme-accent-text" />
+                    <span>{t.autoLockTimeout}</span>
+                  </div>
+                  <select
+                    value={lockSettings.autoLockMinutes}
+                    onChange={(e) => updateLockSettings({ autoLockMinutes: Number(e.target.value) })}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-xl theme-bg-surface border theme-border theme-text-primary focus:outline-none focus:border-[#1A73E8] cursor-pointer"
+                  >
+                    {timeoutOptions.map((opt) => (
+                      <option key={opt.minutes} value={opt.minutes}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Section 3: Font Size */}
+          <div className="pt-4 border-t theme-border">
+            <div className="flex items-center gap-1.5 mb-2.5 text-xs font-semibold theme-text-secondary uppercase tracking-wider">
+              <Type className="w-3.5 h-3.5 theme-accent-text" />
+              <span>{t.fontSizeSection}</span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {fontSizesList.map((fs) => {
+                const isSelected = fontSize === fs.id;
+                return (
+                  <button
+                    key={fs.id}
+                    id={`btn-font-size-${fs.id}`}
+                    onClick={() => setFontSize(fs.id)}
+                    className={`py-2 px-3 rounded-xl border text-center transition-all ${
+                      isSelected
+                        ? 'border-[#1A73E8] dark:border-[#E8A33D] bg-[#1A73E8]/10 dark:bg-[#E8A33D]/15 text-[#1A73E8] dark:text-[#E8A33D] font-bold shadow-2xs'
+                        : 'theme-border hover:theme-bg-subtle theme-text-secondary hover:theme-text-primary'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-1.5">
+                      <span className={`${fs.sizeClass}`}>Aa</span>
+                      <span className="text-xs">{fs.name}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Section 4: Language */}
+          <div className="pt-4 border-t theme-border">
+            <div className="flex items-center gap-1.5 mb-2.5 text-xs font-semibold theme-text-secondary uppercase tracking-wider">
+              <Globe className="w-3.5 h-3.5 theme-accent-text" />
+              <span>{t.languageSection}</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {languagesList.map((lang) => {
+                const isSelected = language === lang.id;
+                return (
+                  <button
+                    key={lang.id}
+                    id={`btn-language-${lang.id}`}
+                    onClick={() => setLanguage(lang.id)}
+                    className={`px-3 py-2 rounded-xl border text-left transition-all flex items-center justify-between ${
+                      isSelected
+                        ? 'border-[#1A73E8] dark:border-[#E8A33D] bg-[#1A73E8]/10 dark:bg-[#E8A33D]/15 text-[#1A73E8] dark:text-[#E8A33D] font-semibold shadow-2xs'
+                        : 'theme-border hover:theme-bg-subtle theme-text-secondary hover:theme-text-primary'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium truncate">
+                        {lang.nativeName}
+                      </div>
+                      <div className="text-[10px] opacity-70 truncate">
+                        {lang.name}
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <Check className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Section 5: Data Backup & Management (Export & Import) */}
+          <div className="pt-4 border-t theme-border space-y-2.5">
+            <div className="flex items-center gap-1.5 mb-1 text-xs font-semibold theme-text-secondary uppercase tracking-wider">
+              <Download className="w-3.5 h-3.5 theme-accent-text" />
+              <span>Data & Backup Management</span>
+            </div>
+
+            {/* Export Card */}
+            {onOpenExport && (
+              <div className="flex items-center justify-between p-3.5 rounded-2xl theme-bg-subtle border theme-border">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-[#1A73E8]/10 dark:bg-[#E8A33D]/15 text-[#1A73E8] dark:text-[#E8A33D] flex items-center justify-center shrink-0">
+                    <Download className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold theme-text-primary">{t.export}</p>
+                    <p className="text-[11px] theme-text-secondary">Export reflections as PDF, Markdown, or JSON backup</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  id="btn-settings-export-vault"
+                  onClick={() => {
+                    onClose();
+                    onOpenExport();
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#1A73E8] hover:bg-[#1557B0] dark:bg-[#E8A33D] dark:hover:bg-[#D9932E] text-white dark:text-[#171310] text-xs font-semibold shadow-xs transition-colors"
+                >
+                  {t.export}
+                </button>
+              </div>
+            )}
+
+            {/* Import Card */}
+            <div className="flex items-center justify-between p-3.5 rounded-2xl theme-bg-subtle border theme-border">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#1A73E8]/10 dark:bg-[#E8A33D]/15 text-[#1A73E8] dark:text-[#E8A33D] flex items-center justify-center shrink-0">
+                  <Upload className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold theme-text-primary">{t.importData || 'Import Data'}</p>
+                  <p className="text-[11px] theme-text-secondary">Restore reflections from an Inkwell JSON backup</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                id="btn-settings-import-vault"
+                onClick={() => {
+                  if (onOpenImport) {
+                    onClose();
+                    onOpenImport();
+                  } else {
+                    setImportModalOpen(true);
+                  }
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-[#1A73E8] hover:bg-[#1557B0] dark:bg-[#E8A33D] dark:hover:bg-[#D9932E] text-white dark:text-[#171310] text-xs font-semibold shadow-xs transition-colors"
+              >
+                {t.importData ? t.importData.split(' ')[0] : 'Import'}
+              </button>
+            </div>
+          </div>
+
+          {/* Section 6: Mental Health Crisis Resources (findahelpline.com) */}
+          <div className="pt-4 border-t theme-border">
+            <a
+              href="https://findahelpline.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-400/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 hover:bg-amber-500/15 transition-colors group"
+            >
+              <div className="flex items-center gap-2.5">
+                <HeartHandshake className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <div className="text-left">
+                  <p className="text-xs font-bold">{t.needToTalk}</p>
+                  <p className="text-[11px] opacity-85 leading-snug">{t.helplineDirectory}</p>
+                </div>
+              </div>
+              <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 shrink-0 ml-2" />
+            </a>
+          </div>
+
+          {/* Section 7: Danger Zone (Account & Data Deletion) */}
+          <div className="pt-4 border-t border-rose-500/20">
+            <div className="p-3.5 rounded-2xl bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <div className="w-7 h-7 rounded-xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0 mt-0.5">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div className="text-left min-w-0">
+                  <h4 className="text-xs font-bold text-rose-600 dark:text-rose-400">
+                    {t.dangerZone}
+                  </h4>
+                  <p className="text-[11px] theme-text-secondary mt-0.5 leading-snug">
+                    {t.deleteAccountDesc}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                id="btn-open-delete-account"
+                onClick={() => setDeleteAccountModalOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-colors shrink-0 flex items-center justify-center gap-1.5 active:scale-95"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{t.deleteAccount}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-3.5 border-t theme-border theme-bg-subtle flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1.5 theme-text-secondary text-[11px]">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span>
+              {isSavingPrefs ? (
+                <span className="flex items-center gap-1 text-[#1A73E8] dark:text-[#E8A33D]">
+                  <Cloud className="w-3 h-3 animate-pulse" />
+                  Saving...
+                </span>
+              ) : (
+                <span>Auto-saved to cloud</span>
+              )}
+            </span>
+          </div>
+
+          <button
+            id="btn-settings-close-footer"
+            onClick={onClose}
+            className="px-5 py-1.5 rounded-full bg-[#1A73E8] hover:bg-[#1557B0] dark:bg-[#E8A33D] dark:hover:bg-[#D9932E] text-white dark:text-[#171310] font-semibold text-xs shadow-2xs transition-all active:scale-95"
+          >
+            {t.close}
+          </button>
+        </div>
+      </div>
+
+      {/* Delete Account & Data Confirmation Modal */}
+      <DeleteAccountModal
+        isOpen={deleteAccountModalOpen}
+        onClose={() => setDeleteAccountModalOpen(false)}
+        userId={userId}
+        userEmail={userEmail}
+      />
+
+      {/* Import Backup Data Modal */}
+      <ImportDataModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        entries={entries}
+        userId={userId}
+      />
+    </div>
+  );
+};
