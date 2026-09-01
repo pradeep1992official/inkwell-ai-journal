@@ -274,6 +274,19 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
     root.setAttribute('lang', language);
     root.setAttribute('data-language', language);
 
+    // Synchronize browser theme-color meta tags with the active theme's warm accent / canvas color
+    const themeColorMap: Record<string, { themeColor: string; bg: string }> = {
+      paper: { themeColor: '#8C6239', bg: '#F8F6F0' },
+      dark: { themeColor: '#E8A33D', bg: '#1A1816' },
+      sepia: { themeColor: '#7C4A27', bg: '#F4ECE1' },
+      minimal: { themeColor: '#525252', bg: '#FFFFFF' },
+    };
+    const currentThemeColors = themeColorMap[theme] || themeColorMap.paper;
+    const metaThemeColors = document.querySelectorAll('meta[name="theme-color"]');
+    metaThemeColors.forEach((meta) => {
+      meta.setAttribute('content', currentThemeColors.themeColor);
+    });
+
     try {
       localStorage.setItem(STORAGE_KEYS.THEME, theme);
       localStorage.setItem(STORAGE_KEYS.THEME_MODE, themeMode);

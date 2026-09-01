@@ -321,7 +321,7 @@ export const translations: Record<Language, TranslationDictionary> = {
   en: {
     appName: 'Inkwell',
     appSubtitle: 'AI reflection journal & mindful thinking space',
-    geminiVersion: 'Gemini 3.6',
+    geminiVersion: 'Powered by Gemini',
     vault: 'Vault',
     newReflection: 'New Reflection',
     newShort: 'New',
@@ -620,7 +620,7 @@ export const translations: Record<Language, TranslationDictionary> = {
   es: {
     appName: 'Inkwell',
     appSubtitle: 'Diario de reflexión con IA y espacio consciente',
-    geminiVersion: 'Gemini 3.6',
+    geminiVersion: 'Powered by Gemini',
     vault: 'Bóveda',
     newReflection: 'Nueva Reflexión',
     newShort: 'Nuevo',
@@ -919,7 +919,7 @@ export const translations: Record<Language, TranslationDictionary> = {
   fr: {
     appName: 'Inkwell',
     appSubtitle: 'Journal de réflexion IA & espace de pensée consciente',
-    geminiVersion: 'Gemini 3.6',
+    geminiVersion: 'Powered by Gemini',
     vault: 'Coffre',
     newReflection: 'Nouvelle Réflexion',
     newShort: 'Nouveau',
@@ -1218,7 +1218,7 @@ export const translations: Record<Language, TranslationDictionary> = {
   hi: {
     appName: 'Inkwell',
     appSubtitle: 'एआई चिंतन डायरी और विचारशील स्थान',
-    geminiVersion: 'Gemini 3.6',
+    geminiVersion: 'Powered by Gemini',
     vault: 'वॉल्ट',
     newReflection: 'नया चिंतन',
     newShort: 'नया',
@@ -1517,7 +1517,7 @@ export const translations: Record<Language, TranslationDictionary> = {
   ta: {
     appName: 'Inkwell',
     appSubtitle: 'AI சிந்தனை நாட்குறிப்பு & அமைதியான சிந்தனை வெளி',
-    geminiVersion: 'Gemini 3.6',
+    geminiVersion: 'Powered by Gemini',
     vault: 'பெட்டகம்',
     newReflection: 'புதிய சிந்தனை',
     newShort: 'புதியது',

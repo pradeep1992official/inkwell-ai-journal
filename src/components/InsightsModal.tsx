@@ -44,7 +44,7 @@ export const InsightsModal: React.FC<InsightsModalProps> = ({
   const handleCopyAll = () => {
     const text = `# Inkwell Reflection Insights: ${title}
 Mood: ${data.detectedMood || 'N/A'}
-Model: ${data.modelUsed || 'Gemini 3.6 Flash'}
+Model: ${data.modelUsed || 'Powered by Gemini'}
 
 ## ${t.executiveSummary}
 ${data.summary || 'N/A'}
@@ -255,7 +255,7 @@ Tags: ${data.tags?.map(t => `#${t}`).join(' ') || ''}
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
               <Sparkles className="w-3 h-3 theme-accent-text" />
-              Processed by {data.modelUsed || 'Gemini 3.6 Flash'}
+              {data.modelUsed ? `Processed by ${data.modelUsed}` : 'Powered by Gemini'}
             </span>
             {onOpenMoodTrends && (
               <button
