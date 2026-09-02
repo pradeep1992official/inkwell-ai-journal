@@ -15,7 +15,8 @@ import {
   ExternalLink,
   ChevronLeft,
   RotateCcw,
-  TrendingUp
+  TrendingUp,
+  MapPin
 } from 'lucide-react';
 import { JournalEntry } from '../types';
 import { usePreferences } from '../context/PreferencesContext';
@@ -34,6 +35,7 @@ interface HistorySidebarProps {
   onOpenExportModal: () => void;
   onOpenHowToUse?: () => void;
   onOpenMoodTrends?: () => void;
+  onOpenMemories?: () => void;
   onToggleCollapse?: () => void;
 }
 
@@ -51,6 +53,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
   onOpenExportModal,
   onOpenHowToUse,
   onOpenMoodTrends,
+  onOpenMemories,
   onToggleCollapse,
 }) => {
   const { t } = usePreferences();
@@ -151,8 +154,11 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
       const inSummary = entry.summary?.toLowerCase().includes(q);
       const inTags = entry.metadata?.tags?.some((t) => t.toLowerCase().includes(q));
       const inMessages = entry.messages.some((m) => m.content.toLowerCase().includes(q));
+      const inPlaceName = entry.metadata?.placeLocation?.name?.toLowerCase().includes(q);
+      const inPlaceAddress = entry.metadata?.placeLocation?.formattedAddress?.toLowerCase().includes(q);
+      const inPlaceLocality = entry.metadata?.placeLocation?.locality?.toLowerCase().includes(q);
 
-      return inTitle || inSummary || inTags || inMessages;
+      return inTitle || inSummary || inTags || inMessages || inPlaceName || inPlaceAddress || inPlaceLocality;
     });
   }, [entries, searchQuery, selectedMood, selectedMode, selectedTag, dateFilter]);
 
@@ -515,7 +521,27 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                     </p>
 
                     <div className="mt-2.5 flex items-center justify-between gap-2 pt-2 border-t theme-border">
-                      <div className="flex items-center gap-1.5 text-[10px] theme-text-secondary overflow-hidden max-w-[80%]">
+                      <div className="flex items-center gap-1.5 text-[10px] theme-text-secondary overflow-hidden max-w-[80%] flex-wrap">
+                        {entry.metadata?.placeLocation && (
+                          <span 
+                            title={`Tagged Place: ${entry.metadata.placeLocation.name} (${entry.metadata.placeLocation.formattedAddress})`}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[9px] font-medium truncate max-w-[110px]"
+                          >
+                            <MapPin className="w-2.5 h-2.5 shrink-0" />
+                            <span className="truncate">{entry.metadata.placeLocation.name}</span>
+                          </span>
+                        )}
+
+                        {entry.metadata?.weather && (
+                          <span 
+                            title={`Ambient Weather: ${entry.metadata.weather.condition}, ${entry.metadata.weather.temperature}°C, ${entry.metadata.weather.humidity}% humidity`}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 text-[9px] font-medium whitespace-nowrap"
+                          >
+                            <span>{entry.metadata.weather.conditionEmoji || '⛅'}</span>
+                            <span>{entry.metadata.weather.temperature}°C</span>
+                          </span>
+                        )}
+
                         {entry.metadata?.mood && (
                           <span 
                             title={entry.metadata.mood}
@@ -549,8 +575,25 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
           )}
         </div>
 
-        {/* Footer: Export All & Mental Health Helpline */}
+        {/* Footer: Quick tools & Vault export */}
         <div className="p-3 border-t theme-border theme-bg-surface/90 text-xs theme-text-secondary space-y-2 shrink-0 mt-auto">
+          {/* My Memories (Google Places) Button */}
+          {onOpenMemories && (
+            <button
+              id="btn-sidebar-memories"
+              onClick={onOpenMemories}
+              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold text-xs border border-emerald-500/20 transition-all shadow-2xs group"
+            >
+              <span className="flex items-center gap-2">
+                <MapPin className="w-3.5 h-3.5" />
+                <span>My Memories (Places)</span>
+              </span>
+              <span className="text-[10px] opacity-70 group-hover:opacity-100 font-normal">
+                By City
+              </span>
+            </button>
+          )}
+
           <div className="flex items-center justify-between">
             <button
               onClick={onOpenExportModal}

@@ -170,6 +170,10 @@ export interface TranslationDictionary {
   modeActionItemsDesc: string;
 
   inputPlaceholder: string;
+  reflectOnThis: string;
+  reflectActionPlaceholder: string;
+  continueWritingPlaceholder: string;
+  geminiReflecting: string;
   send: string;
   voiceInput: string;
   stopVoiceInput: string;
@@ -477,6 +481,10 @@ export const translations: Record<Language, TranslationDictionary> = {
     modeActionItemsDesc: 'Extracts clear, prioritized next steps',
 
     inputPlaceholder: 'Write your thoughts freely, express what is on your mind, or ask Gemini to reflect with you...',
+    reflectOnThis: 'Reflect on this',
+    reflectActionPlaceholder: 'Write your thoughts freely... write multiple paragraphs, quiet reflections, or raw thoughts without interruption. When ready, invite Gemini to reflect.',
+    continueWritingPlaceholder: 'Continue writing your reflection... write as much as you like.',
+    geminiReflecting: 'Gemini is reflecting on your entry...',
     send: 'Send',
     voiceInput: 'Voice input',
     stopVoiceInput: 'Stop recording',
@@ -776,6 +784,10 @@ export const translations: Record<Language, TranslationDictionary> = {
     modeActionItemsDesc: 'Extrae pasos siguientes claros y priorizados',
 
     inputPlaceholder: 'Escribe tus pensamientos libremente o pide a Gemini reflexionar contigo...',
+    reflectOnThis: 'Reflexionar sobre esto',
+    reflectActionPlaceholder: 'Escribe tus pensamientos libremente... escribe varios párrafos, reflexiones tranquilas o ideas en bruto sin interrupciones. Cuando estés listo, invita a Gemini a reflexionar.',
+    continueWritingPlaceholder: 'Continúa escribiendo tu reflexión... escribe tanto como desees.',
+    geminiReflecting: 'Gemini está reflexionando sobre tu entrada...',
     send: 'Enviar',
     voiceInput: 'Entrada de voz',
     stopVoiceInput: 'Detener grabación',
@@ -1075,6 +1087,10 @@ export const translations: Record<Language, TranslationDictionary> = {
     modeActionItemsDesc: 'Extraction d\'étapes concrètes et prioritaires',
 
     inputPlaceholder: 'Exprimez librement vos pensées ou demandez à Gemini d\'explorer avec vous...',
+    reflectOnThis: 'Réfléchir à ceci',
+    reflectActionPlaceholder: 'Écrivez librement vos pensées... plusieurs paragraphes, réflexions calmes ou pensées brutes sans interruption. Quand vous êtes prêt, invitez Gemini à réfléchir.',
+    continueWritingPlaceholder: 'Continuez à rédiger votre réflexion... écrivez autant que vous le souhaitez.',
+    geminiReflecting: 'Gemini réfléchit sur votre journal...',
     send: 'Envoyer',
     voiceInput: 'Saisie vocale',
     stopVoiceInput: 'Arrêter l\'enregistrement',
@@ -1374,6 +1390,10 @@ export const translations: Record<Language, TranslationDictionary> = {
     modeActionItemsDesc: 'स्पष्ट, प्राथमिकता वाले अगले कदमों का निष्कर्षण',
 
     inputPlaceholder: 'अपने विचारों को खुलकर लिखें, मन की बात साझा करें या Gemini से चिंतन में मदद लें...',
+    reflectOnThis: 'इस पर विचार करें',
+    reflectActionPlaceholder: 'अपने विचार खुलकर लिखें... बिना किसी बाधा के कई पैराग्राफ, शांत विचार या आत्मचिंतन लिखें। जब तैयार हों, तो Gemini को विचार करने के लिए आमंत्रित करें।',
+    continueWritingPlaceholder: 'अपना चिंतन आगे लिखना जारी रखें... जितना चाहें उतना लिखें।',
+    geminiReflecting: 'Gemini आपकी प्रविष्टि पर विचार कर रहा है...',
     send: 'भेजें',
     voiceInput: 'ध्वनि इनपुट',
     stopVoiceInput: 'रिकॉर्डिंग रोकें',
@@ -1673,6 +1693,10 @@ export const translations: Record<Language, TranslationDictionary> = {
     modeActionItemsDesc: 'முன்னுரிமை அளிக்கப்பட்ட அடுத்த படிகளைப் பிரித்தெடுக்கிறது',
 
     inputPlaceholder: 'உங்கள் எண்ணங்களை சுதந்திரமாக எழுதுங்கள் அல்லது Gemini உடன் உரையாடத் தொடங்குங்கள்...',
+    reflectOnThis: 'சிந்திக்கவும்',
+    reflectActionPlaceholder: 'உங்கள் எண்ணங்களை சுதந்திரமாக எழுதுங்கள்... குறுக்கீடுகள் இன்றி பல பத்திகள், அமைதியான சிந்தனைகள் அல்லது மூல எண்ணங்களை எழுதுங்கள். தயாரானதும், சிந்திக்க ஜெமினியை அழைக்கவும்.',
+    continueWritingPlaceholder: 'உங்கள் சிந்தனையை தொடர்ந்து எழுதுங்கள்... நீங்கள் விரும்பும் வரை எழுதுங்கள்.',
+    geminiReflecting: 'ஜெமினி உங்கள் பதிவை சிந்திக்கிறது...',
     send: 'அனுப்புக',
     voiceInput: 'குரல் உள்ளீடு',
     stopVoiceInput: 'பதிவை நிறுத்து',

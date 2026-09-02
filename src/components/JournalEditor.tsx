@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Send, 
@@ -30,13 +32,17 @@ import {
   MoreVertical,
   Sparkles,
   Pencil,
-  TrendingUp
+  TrendingUp,
+  MapPin,
+  CloudSun
 } from 'lucide-react';
-import { JournalEntry, JournalMessage, ReflectionMode } from '../types';
+import { JournalEntry, JournalMessage, ReflectionMode, LocationMemory, WeatherData } from '../types';
 import { saveJournalEntry } from '../lib/firestoreService';
+import { fetchCurrentWeather } from '../lib/weatherService';
 import { InsightsModal, InsightsData } from './InsightsModal';
 import { ExportVaultModal } from './ExportVaultModal';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
+import { LocationPickerModal } from './LocationPickerModal';
 import { usePreferences } from '../context/PreferencesContext';
 
 interface JournalEditorProps {
@@ -92,13 +98,18 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   onToggleFocusMode,
   onOpenMoodTrends,
 }) => {
-  const { t, language } = usePreferences();
+  const { t, language, weatherEnabled } = usePreferences();
   const [inputText, setInputText] = useState('');
   const [selectedMode, setSelectedMode] = useState<ReflectionMode>('reflect');
   const [isGenerating, setIsGenerating] = useState(false);
   const [, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Weather state
+  const [isFetchingWeather, setIsFetchingWeather] = useState(false);
+  const [showWeatherGeoBanner, setShowWeatherGeoBanner] = useState(false);
+  const [, setWeatherFetchError] = useState<string | null>(null);
 
   // Voice dictation & recording state
   const [isListening, setIsListening] = useState(false);
@@ -141,6 +152,9 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   // Message editing state
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editMessageText, setEditMessageText] = useState('');
+
+  // Location Picker Modal state
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
 
   // Dropdown States for grouped options
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
@@ -259,6 +273,73 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       textareaRef.current.style.height = `${Math.max(34, Math.min(textareaRef.current.scrollHeight, 140))}px`;
     }
   }, [inputText]);
+
+  // Ambient Weather: Quiet auto-fetch if permission is granted, or show gentle prompt if new reflection
+  useEffect(() => {
+    if (!weatherEnabled || entry.metadata?.weather) return;
+
+    let isMounted = true;
+
+    const checkAndAutoAttach = async () => {
+      // 1. If entry has place coordinates, fetch weather without requiring device geolocation
+      if (entry.metadata?.placeLocation?.lat && entry.metadata?.placeLocation?.lng) {
+        const w = await fetchCurrentWeather(entry.metadata.placeLocation.lat, entry.metadata.placeLocation.lng);
+        if (w && isMounted) {
+          const updated: JournalEntry = {
+            ...entry,
+            metadata: {
+              ...entry.metadata,
+              weather: w,
+            },
+          };
+          await persistEntry(updated);
+        }
+        return;
+      }
+
+      // 2. Check browser geolocation permission status
+      if (typeof navigator !== 'undefined' && navigator.permissions && navigator.permissions.query) {
+        try {
+          const status = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+          if (status.state === 'granted') {
+            navigator.geolocation.getCurrentPosition(
+              async (pos) => {
+                if (!isMounted) return;
+                const w = await fetchCurrentWeather(pos.coords.latitude, pos.coords.longitude);
+                if (w && isMounted) {
+                  const updated: JournalEntry = {
+                    ...entry,
+                    metadata: {
+                      ...entry.metadata,
+                      weather: w,
+                    },
+                  };
+                  await persistEntry(updated);
+                }
+              },
+              () => {},
+              { timeout: 8000, maximumAge: 600000, enableHighAccuracy: false }
+            );
+          } else if (status.state === 'prompt') {
+            try {
+              const dismissed = localStorage.getItem('inkwell_weather_geo_dismissed');
+              if (dismissed !== 'true' && entry.messages.length === 0) {
+                setShowWeatherGeoBanner(true);
+              }
+            } catch {}
+          }
+        } catch {
+          // Permissions API may not support geolocation query in older browsers
+        }
+      }
+    };
+
+    checkAndAutoAttach();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [entry.id, weatherEnabled]);
 
   // Clean up all audio recording, playback & speech recognition resources
   const cleanupAudioResources = useCallback(() => {
@@ -609,6 +690,112 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       editedAt: Date.now(),
     };
     await persistEntry(updated);
+  };
+
+  // Location Memory Handler
+  const handleSelectLocation = async (placeLocation: LocationMemory | null) => {
+    const updated: JournalEntry = {
+      ...entry,
+      metadata: {
+        ...entry.metadata,
+        placeLocation: placeLocation || null,
+      },
+      editedAt: Date.now(),
+    };
+    await persistEntry(updated);
+
+    // If a place with coordinates was attached and entry has no weather, offer or auto-fetch weather
+    if (weatherEnabled && !entry.metadata?.weather && placeLocation?.lat && placeLocation?.lng) {
+      handleAttachWeather({ lat: placeLocation.lat, lng: placeLocation.lng });
+    }
+  };
+
+  // Weather Attachment Handlers
+  const handleAttachWeather = async (customCoords?: { lat: number; lng: number }) => {
+    if (isFetchingWeather) return;
+    setIsFetchingWeather(true);
+    setWeatherFetchError(null);
+
+    try {
+      let lat = customCoords?.lat;
+      let lng = customCoords?.lng;
+
+      // 1. Fallback to attached place coordinates if available
+      if ((lat === undefined || lng === undefined) && entry.metadata?.placeLocation?.lat && entry.metadata?.placeLocation?.lng) {
+        lat = entry.metadata.placeLocation.lat;
+        lng = entry.metadata.placeLocation.lng;
+      }
+
+      // 2. Fallback to device location
+      if (lat === undefined || lng === undefined) {
+        if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+          throw new Error('Geolocation is not supported by your browser.');
+        }
+
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            timeout: 8000,
+            maximumAge: 600000,
+            enableHighAccuracy: false,
+          });
+        });
+
+        lat = position.coords.latitude;
+        lng = position.coords.longitude;
+      }
+
+      const weatherData = await fetchCurrentWeather(lat, lng);
+      if (!weatherData) {
+        throw new Error('Could not retrieve current weather conditions from Open-Meteo.');
+      }
+
+      const updated: JournalEntry = {
+        ...entry,
+        metadata: {
+          ...entry.metadata,
+          weather: weatherData,
+        },
+        editedAt: Date.now(),
+      };
+      await persistEntry(updated);
+      setShowWeatherGeoBanner(false);
+    } catch (err: any) {
+      console.warn('Weather attachment failed:', err);
+      if (err?.code === 1 /* PERMISSION_DENIED */) {
+        setShowWeatherGeoBanner(false);
+        try {
+          localStorage.setItem('inkwell_weather_geo_dismissed', 'true');
+        } catch {}
+      } else {
+        setWeatherFetchError(err?.message || 'Could not fetch weather.');
+        setTimeout(() => setWeatherFetchError(null), 4000);
+      }
+    } finally {
+      setIsFetchingWeather(false);
+    }
+  };
+
+  const handleRemoveWeather = async () => {
+    const updated: JournalEntry = {
+      ...entry,
+      metadata: {
+        ...entry.metadata,
+        weather: null,
+      },
+      editedAt: Date.now(),
+    };
+    await persistEntry(updated);
+  };
+
+  const handleAcceptWeatherGeo = () => {
+    handleAttachWeather();
+  };
+
+  const handleDeclineWeatherGeo = () => {
+    setShowWeatherGeoBanner(false);
+    try {
+      localStorage.setItem('inkwell_weather_geo_dismissed', 'true');
+    } catch {}
   };
 
   // Message Editing Handlers
@@ -1212,8 +1399,10 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
 
         {/* Metadata Bar: Mood Dropdown and Tags */}
         <div id="journal-meta-toolbar" className="mt-2 pt-2 sm:mt-3 sm:pt-2.5 border-t theme-border flex items-center justify-between gap-2 text-xs">
-          {/* Mood Dropdown Selector */}
-          <div className="relative shrink-0" ref={moodDropdownRef}>
+          {/* Mood Dropdown and Location Controls */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Mood Dropdown Selector */}
+            <div className="relative shrink-0" ref={moodDropdownRef}>
             {(() => {
               const isUnsetWithContent = !entry.metadata?.mood && (entry.messages.length > 0 || inputText.trim().length > 20);
               return (
@@ -1304,6 +1493,89 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             )}
           </div>
 
+          {/* Weather Display / Attachment (Open-Meteo) */}
+          {weatherEnabled && (
+            <div id="container-weather-bar" className="flex items-center gap-1.5 shrink-0 pl-1">
+              {entry.metadata?.weather ? (
+                <div
+                  id="chip-attached-weather"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/30 text-xs font-medium shadow-2xs group"
+                  title={`Ambient Weather: ${entry.metadata.weather.condition} · ${entry.metadata.weather.temperature}°C · ${entry.metadata.weather.humidity}% humidity${entry.metadata.weather.isBackfilled ? ' (Historical Archive)' : ''}`}
+                >
+                  <span className="text-sm leading-none" role="img" aria-label={entry.metadata.weather.condition}>
+                    {entry.metadata.weather.conditionEmoji || '⛅'}
+                  </span>
+                  <span className="font-semibold tracking-tight">
+                    {entry.metadata.weather.temperature}°C
+                  </span>
+                  <span className="text-[10px] opacity-75 hidden sm:inline">
+                    · {entry.metadata.weather.humidity}% humidity
+                  </span>
+                  <button
+                    id="btn-remove-weather-chip"
+                    onClick={handleRemoveWeather}
+                    className="opacity-60 group-hover:opacity-100 hover:text-rose-500 transition-opacity p-0.5 rounded-full hover:bg-rose-500/10 shrink-0 ml-0.5"
+                    title="Remove weather from this reflection"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  id="btn-add-weather"
+                  onClick={() => handleAttachWeather()}
+                  disabled={isFetchingWeather}
+                  title="Attach current ambient weather (Open-Meteo). Private & derived conditions only."
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium theme-text-secondary hover:text-sky-600 dark:hover:text-sky-400 hover:theme-bg-subtle border border-transparent hover:theme-border transition-colors whitespace-nowrap"
+                >
+                  {isFetchingWeather ? (
+                    <Loader2 className="w-3.5 h-3.5 text-sky-500 animate-spin" />
+                  ) : (
+                    <CloudSun className="w-3.5 h-3.5 text-sky-600/70 dark:text-sky-400/70" />
+                  )}
+                  <span className="hidden xs:inline">Weather</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Location Memory (Google Places - Opt-in) */}
+          <div id="container-location-bar" className="flex items-center gap-1.5 shrink-0 pl-1">
+            {entry.metadata?.placeLocation ? (
+              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-xs font-medium shadow-2xs group">
+                <button
+                  onClick={() => setLocationPickerOpen(true)}
+                  className="flex items-center gap-1.5 hover:underline max-w-[140px] sm:max-w-[200px] truncate"
+                  title={`Attached Place: ${entry.metadata.placeLocation.name} (${entry.metadata.placeLocation.formattedAddress}). Click to change.`}
+                  id="btn-edit-attached-location"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span className="truncate">{entry.metadata.placeLocation.name}</span>
+                </button>
+                <button
+                  onClick={() => handleSelectLocation(null)}
+                  className="hover:text-rose-500 transition-colors p-0.5 rounded-full hover:bg-rose-500/10 shrink-0 ml-0.5"
+                  title="Remove location from this reflection"
+                  id="btn-remove-location-chip"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                id="btn-add-location"
+                onClick={() => setLocationPickerOpen(true)}
+                title="Attach an optional real place to this reflection (Google Places). Fully private & opt-in."
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium theme-text-secondary hover:text-emerald-600 dark:hover:text-emerald-400 hover:theme-bg-subtle border border-transparent hover:theme-border transition-colors whitespace-nowrap"
+              >
+                <MapPin className="w-3.5 h-3.5 text-emerald-600/70 dark:text-emerald-400/70" />
+                <span className="hidden xs:inline">Add Location</span>
+                <span className="xs:hidden">Location</span>
+              </button>
+            )}
+          </div>
+        </div>
+
           {/* Modular Tags */}
           <div id="container-tags-bar" className="flex items-center gap-1.5 shrink-0 pl-2 border-l theme-border">
             <Tag className="w-3 h-3 theme-text-secondary shrink-0" />
@@ -1352,6 +1624,42 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Weather Geolocation Gentle Permission Banner */}
+      {showWeatherGeoBanner && weatherEnabled && !entry.metadata?.weather && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          id="banner-weather-geo-prompt"
+          className="px-4 py-2 bg-sky-50 dark:bg-sky-950/40 border-b border-sky-200 dark:border-sky-900/50 text-sky-900 dark:text-sky-200 text-xs flex items-center justify-between gap-3 shrink-0"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <CloudSun className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+            <span className="truncate sm:whitespace-normal font-medium">
+              Inkwell can add local weather to your reflections — allow location access?
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              id="btn-allow-weather-geo"
+              onClick={handleAcceptWeatherGeo}
+              disabled={isFetchingWeather}
+              className="px-3 py-1 rounded-full text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white shadow-2xs transition-colors active:scale-95 flex items-center gap-1"
+            >
+              {isFetchingWeather ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+              <span>Allow</span>
+            </button>
+            <button
+              id="btn-decline-weather-geo"
+              onClick={handleDeclineWeatherGeo}
+              className="px-2.5 py-1 rounded-full text-xs font-medium text-sky-700 dark:text-sky-300 hover:bg-sky-200/50 dark:hover:bg-sky-900/50 transition-colors"
+            >
+              Not now
+            </button>
+          </div>
+        </motion.div>
+      )}
 
       {/* Error Banner if any */}
       {errorMessage && (
@@ -1588,11 +1896,13 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                           </div>
                         </div>
                       ) : (
-                        <p className="journal-entry-text whitespace-pre-wrap leading-relaxed text-[13.5px] sm:text-[15px] theme-text-primary">{msg.content}</p>
+                        <div className="prose-reflection journal-entry-text theme-text-primary text-[13.5px] sm:text-[15px]">
+                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{msg.content}</ReactMarkdown>
+                        </div>
                       )
                     ) : (
                       <div className="prose-reflection journal-entry-text theme-text-primary text-[13.5px] sm:text-[15px]">
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{msg.content}</ReactMarkdown>
                       </div>
                     )}
                   </div>
@@ -1859,6 +2169,14 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         onConfirm={handleConfirmDeleteCurrent}
         entryTitle={entry.title}
         isDeleting={isDeleting}
+      />
+
+      {/* Google Places Location Picker Modal */}
+      <LocationPickerModal
+        isOpen={locationPickerOpen}
+        onClose={() => setLocationPickerOpen(false)}
+        currentLocation={entry.metadata?.placeLocation}
+        onSelectLocation={handleSelectLocation}
       />
     </div>
   );

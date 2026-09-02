@@ -316,7 +316,7 @@ html[data-language="hi"] .prose-reflection h4 {
 .prose-reflection h4 {
   font-family: var(--font-display);
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
   margin-top: 1.25rem;
   margin-bottom: 0.5rem;
@@ -324,7 +324,14 @@ html[data-language="hi"] .prose-reflection h4 {
 
 .prose-reflection h1 { font-size: 1.35em; }
 .prose-reflection h2 { font-size: 1.2em; }
-.prose-reflection h3 { font-size: 1.1em; }
+.prose-reflection h3 { font-size: 1.12em; color: var(--accent-primary); }
+.prose-reflection h4 { font-size: 0.98em; font-weight: 700; }
+
+.prose-reflection hr {
+  border: none;
+  border-top: 1px dashed var(--border-color);
+  margin: 1.25rem 0;
+}
 
 .prose-reflection ul,
 .prose-reflection ol {

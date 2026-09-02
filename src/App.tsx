@@ -18,10 +18,13 @@ import { ExportVaultModal } from './components/ExportVaultModal';
 import { ImportDataModal } from './components/ImportDataModal';
 import { HowToUseModal } from './components/HowToUseModal';
 import { MoodTrendsModal } from './components/MoodTrendsModal';
+import { CalendarDayReview } from './components/CalendarDayReview';
+import { MyMemoriesModal } from './components/MyMemoriesModal';
 import { AppLockOverlay } from './components/AppLockOverlay';
 import { OnboardingTour } from './components/OnboardingTour';
 import { isAppLockConfigured } from './lib/lockService';
 import { calculateStreakStats } from './lib/streakService';
+import { fetchCurrentWeather } from './lib/weatherService';
 import { Feather, AlertCircle, Plus, PanelLeftOpen, Undo2, CheckCircle2, X, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { usePreferences } from './context/PreferencesContext';
@@ -32,7 +35,7 @@ interface DeletedToastState {
 }
 
 export default function App() {
-  const { t, loadUserPreferences, isLocked, unlockApp, lockSettings } = usePreferences();
+  const { t, loadUserPreferences, isLocked, unlockApp, lockSettings, weatherEnabled } = usePreferences();
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [entries, setEntries] = useState<JournalEntry[]>([]);
@@ -45,6 +48,8 @@ export default function App() {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [moodTrendsModalOpen, setMoodTrendsModalOpen] = useState(false);
+  const [calendarReviewOpen, setCalendarReviewOpen] = useState(false);
+  const [memoriesModalOpen, setMemoriesModalOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
 
@@ -96,10 +101,42 @@ export default function App() {
   // Calculate streak stats
   const streakStats = useMemo(() => calculateStreakStats(entries), [entries]);
 
+  // Active selected entry object
+  const activeEntry = useMemo(
+    () => entries.find((e) => e.id === selectedEntryId),
+    [entries, selectedEntryId]
+  );
+
   // Create a brand new draft reflection
   const handleNewEntry = useCallback(async () => {
     if (!user) return;
     const newId = `entry-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+
+    let initialWeather = undefined;
+    if (weatherEnabled && typeof navigator !== 'undefined' && navigator.permissions && navigator.permissions.query) {
+      try {
+        const perm = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+        if (perm.state === 'granted') {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              timeout: 4000,
+              maximumAge: 600000,
+              enableHighAccuracy: false,
+            });
+          }).catch(() => null);
+
+          if (pos) {
+            const w = await fetchCurrentWeather(pos.coords.latitude, pos.coords.longitude);
+            if (w) {
+              initialWeather = w;
+            }
+          }
+        }
+      } catch {
+        // Continue creating entry without blocking
+      }
+    }
+
     const newEntry: JournalEntry = {
       id: newId,
       userId: user.uid,
@@ -108,6 +145,7 @@ export default function App() {
       metadata: {
         tags: [],
         mood: undefined,
+        weather: initialWeather,
       },
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -120,7 +158,77 @@ export default function App() {
       console.error('Failed to create new entry:', err);
       setGlobalError('Failed to initialize new reflection entry.');
     }
-  }, [user]);
+  }, [user, weatherEnabled]);
+
+  // Save day synthesis as a brand new dedicated entry
+  const handleSaveAsNewEntry = useCallback(
+    async (title: string, content: string, metadata?: any) => {
+      if (!user) return;
+      const newId = `entry-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      const newEntry: JournalEntry = {
+        id: newId,
+        userId: user.uid,
+        title: title || 'Day Review',
+        messages: [
+          {
+            id: `msg-synthesis-${Date.now()}`,
+            role: 'model',
+            content,
+            timestamp: Date.now(),
+            modelUsed: metadata?.modelUsed || 'gemini-3.7-flash',
+          },
+        ],
+        metadata: {
+          tags: metadata?.tags || ['day-review', 'google-calendar'],
+          mood: metadata?.mood || 'Reflective',
+        },
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      try {
+        await saveJournalEntry(user.uid, newEntry);
+        setSelectedEntryId(newId);
+      } catch (err: any) {
+        console.error('Failed to save synthesis entry:', err);
+        setGlobalError('Failed to save day review entry.');
+      }
+    },
+    [user]
+  );
+
+  // Append synthesized text to active reflection or create new if none
+  const handleInsertTextToActiveEntry = useCallback(
+    async (text: string) => {
+      if (!user) return;
+      if (!activeEntry) {
+        await handleSaveAsNewEntry('Day Reflection', text);
+        return;
+      }
+
+      const updated: JournalEntry = {
+        ...activeEntry,
+        messages: [
+          ...activeEntry.messages,
+          {
+            id: `msg-inserted-${Date.now()}`,
+            role: 'user',
+            content: text,
+            timestamp: Date.now(),
+          },
+        ],
+        updatedAt: Date.now(),
+      };
+
+      try {
+        await saveJournalEntry(user.uid, updated);
+        setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+      } catch (err) {
+        console.error('Failed to append to active entry:', err);
+      }
+    },
+    [user, activeEntry, handleSaveAsNewEntry]
+  );
 
   // Handle entry deletion (Soft-delete with instant Undo capability)
   const handleDeleteEntry = async (entryId: string) => {
@@ -191,9 +299,6 @@ export default function App() {
     setDeletedToast(null);
   };
 
-  // Active selected entry object
-  const activeEntry = entries.find((e) => e.id === selectedEntryId);
-
   // If initial auth is resolving
   if (authLoading) {
     return (
@@ -237,6 +342,8 @@ export default function App() {
           onOpenExportVault={() => setExportModalOpen(true)}
           onOpenImportVault={() => setImportModalOpen(true)}
           onOpenMoodTrends={() => setMoodTrendsModalOpen(true)}
+          onOpenCalendarReview={() => setCalendarReviewOpen(true)}
+          onOpenMemories={() => setMemoriesModalOpen(true)}
           streakCount={streakStats.currentStreak}
         />
       )}
@@ -273,6 +380,7 @@ export default function App() {
             onOpenExportModal={() => setExportModalOpen(true)}
             onOpenHowToUse={() => setHowToUseOpen(true)}
             onOpenMoodTrends={() => setMoodTrendsModalOpen(true)}
+            onOpenMemories={() => setMemoriesModalOpen(true)}
             onToggleCollapse={() => setDesktopSidebarCollapsed(true)}
           />
         )}
@@ -400,6 +508,32 @@ export default function App() {
         userId={user.uid}
         onImportComplete={(count) => {
           // If we imported entries, optionally select the first new entry or keep view
+        }}
+      />
+
+      {/* Google Calendar: "What happened today?" Day Review Modal */}
+      <CalendarDayReview
+        isOpen={calendarReviewOpen}
+        onClose={() => setCalendarReviewOpen(false)}
+        entries={entries}
+        activeEntry={activeEntry}
+        onInsertTextToActiveEntry={handleInsertTextToActiveEntry}
+        onSaveAsNewEntry={handleSaveAsNewEntry}
+        userName={user.displayName || user.email?.split('@')[0] || ''}
+      />
+
+      {/* Google Places: "My Memories" Location Browser Modal */}
+      <MyMemoriesModal
+        isOpen={memoriesModalOpen}
+        onClose={() => setMemoriesModalOpen(false)}
+        entries={entries}
+        onSelectEntry={(entryId) => {
+          setSelectedEntryId(entryId);
+          setMemoriesModalOpen(false);
+        }}
+        onNewEntry={() => {
+          setMemoriesModalOpen(false);
+          handleNewEntry();
         }}
       />
 

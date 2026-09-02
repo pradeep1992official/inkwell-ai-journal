@@ -15,7 +15,9 @@ import {
   Download,
   Upload,
   TrendingUp,
-  Sparkles
+  Sparkles,
+  Calendar,
+  MapPin
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { logOut } from '../lib/firebase';
@@ -33,6 +35,8 @@ interface NavbarProps {
   onOpenExportVault?: () => void;
   onOpenImportVault?: () => void;
   onOpenMoodTrends?: () => void;
+  onOpenCalendarReview?: () => void;
+  onOpenMemories?: () => void;
   streakCount?: number;
 }
 
@@ -47,6 +51,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenExportVault,
   onOpenImportVault,
   onOpenMoodTrends,
+  onOpenCalendarReview,
+  onOpenMemories,
   streakCount = 0,
 }) => {
   const { theme, themeMode, toggleTheme, t, lockSettings, lockApp, startTour } = usePreferences();
@@ -118,6 +124,19 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {user && (
             <>
+              {/* Google Calendar Schedule & Day Review Button */}
+              {onOpenCalendarReview && (
+                <button
+                  id="btn-navbar-calendar-review"
+                  onClick={onOpenCalendarReview}
+                  title="Google Calendar — What happened today? Connect schedule & summarize day"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-[11px] sm:text-xs font-bold transition-all border border-blue-500/20 active:scale-95 shadow-2xs"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Schedule</span>
+                </button>
+              )}
+
               {/* Streak Tracker Badge */}
               {onOpenStreakModal && (
                 <button
@@ -242,6 +261,60 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
 
                   <div className="space-y-1">
+                    {/* Google Places: My Memories */}
+                    {onOpenMemories && (
+                      <button
+                        id="btn-dropdown-memories"
+                        onClick={() => {
+                          setIsAvatarDropdownOpen(false);
+                          onOpenMemories();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left theme-text-primary hover:theme-bg-subtle transition-colors group"
+                      >
+                        <div className="w-7 h-7 rounded-lg theme-bg-subtle group-hover:bg-emerald-500/10 dark:group-hover:bg-emerald-500/20 flex items-center justify-center theme-text-secondary group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                          <MapPin className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold leading-tight flex items-center justify-between">
+                            <span>My Memories</span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                              Places
+                            </span>
+                          </div>
+                          <div className="text-[10px] theme-text-secondary leading-tight mt-0.5 truncate">
+                            Browse reflections grouped by city
+                          </div>
+                        </div>
+                      </button>
+                    )}
+
+                    {/* Google Calendar: What happened today? */}
+                    {onOpenCalendarReview && (
+                      <button
+                        id="btn-dropdown-calendar-review"
+                        onClick={() => {
+                          setIsAvatarDropdownOpen(false);
+                          onOpenCalendarReview();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left theme-text-primary hover:theme-bg-subtle transition-colors group"
+                      >
+                        <div className="w-7 h-7 rounded-lg theme-bg-subtle group-hover:bg-blue-500/10 dark:group-hover:bg-blue-500/20 flex items-center justify-center theme-text-secondary group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                          <Calendar className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold leading-tight flex items-center justify-between">
+                            <span>Google Calendar</span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400">
+                              Schedule
+                            </span>
+                          </div>
+                          <div className="text-[10px] theme-text-secondary leading-tight mt-0.5 truncate">
+                            “What happened today?” Day Review
+                          </div>
+                        </div>
+                      </button>
+                    )}
+
                     {/* How to Use / User Guide Button */}
                     {onOpenHowToUse && (
                       <button

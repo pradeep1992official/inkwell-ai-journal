@@ -28,8 +28,16 @@ Inkwell pairs the warmth of personal journaling with the analytical and empathet
    - Fallback 1: `gemini-3.1-flash-lite`
    - Fallback 2: `gemini-flash-latest`
    - Fallback 3: `gemini-3.7-flash`
-6. **Server-Side Secret Management**: Gemini API calls are securely proxied through the Express backend; API keys are never exposed to client browsers.
+6. **Server-Side Secret Management**: Gemini API and Google Places API calls are securely proxied through the Express backend; secret keys are never exposed to client browsers.
 7. **Zero-Crash Payload Hygiene**: Recursive `undefined`-stripping before saving to Firestore to protect against driver rejections.
+8. **Location Memory (Opt-In Place Tagging & City Browsing)**:
+   - **Privacy-First Tagging**: Manual, explicit place attachment using Google Places Autocomplete API.
+   - **My Memories Hub**: Group and browse reflections by city/locality without leaking exact private GPS coordinates unless opted-in.
+   - **Vault Search Integration**: Instant search across journal vault by place name or locality.
+9. **Ambient Weather & Atmospheric Reflections (Open-Meteo Integration)**:
+   - **Privacy-First Weather Derivation**: Fetches current ambient weather (condition, temperature, humidity) using the Open-Meteo API without storing raw GPS coordinates unless opted in.
+   - **Settings Toggle & Historical Backfill**: Enable/disable automatic weather in Settings, plus a one-click backfill tool to enrich past reflections that have tagged cities or places with historical weather data.
+   - **Writing Pattern Insights**: Mood Trends view surfaces observational correlations between ambient weather conditions, entry length, and emotional state.
 
 ---
 
@@ -135,3 +143,11 @@ gcloud run services update inkwell \
 | **TC-06** | Google Sign-In Authentication | Initiates Firebase Google popup, provisions user session, and fetches isolated reflections and saved preferences. |
 | **TC-07** | Write & Send Reflection in Any Mode | Messages are securely saved in real time to `/users/{userId}/entries/{entryId}` and processed with Gemini 3.6 Flash fallback ladder. |
 | **TC-08** | Executive Insights Extraction | Clicking "Insights" generates reflection synthesis, key realizations, and emotional tone with instant copyable summary. |
+| **TC-09** | Tag Location via Google Places Modal | Tapping the "Location" button in the reflection editor opens the location search modal; selecting a place stores its name, locality, and address in the entry metadata. |
+| **TC-10** | Browse Reflections by City in "My Memories" | Opening "My Memories" from the sidebar or profile menu displays grouped cards by city/locality with count pills, mood badges, and direct reflection links. |
+| **TC-11** | Vault Search by Place / Locality | Typing a city name (e.g. "Coimbatore", "San Francisco") into the journal vault search immediately filters entries matching the tagged place. |
+| **TC-12** | Ambient Weather Display & Opt-In | Opening a new reflection with location access displays an ambient weather badge (emoji + temperature + humidity) in the toolbar and saves it to metadata. |
+| **TC-13** | Ambient Weather Toggle in Settings | Toggling off "Ambient Weather & Context" in Settings disables automatic ambient weather detection across new entries. |
+| **TC-14** | Historical Weather Backfill | Clicking "Add Weather" under Settings triggers batch backfilling via Open-Meteo Archive API for all past entries with tagged places, showing live progress. |
+| **TC-15** | Weather-Mood Correlative Insights | Opening Mood Trends shows atmospheric breakdown cards correlating weather conditions with word count and primary moods. |
+

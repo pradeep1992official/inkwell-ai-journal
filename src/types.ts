@@ -25,7 +25,24 @@ export interface UserPreferences {
   focusMode?: boolean;
   hasCompletedTour?: boolean;
   tourCompletedAt?: number;
+  weatherEnabled?: boolean;
   updatedAt?: number;
+}
+
+export type PreferenceFetchStatus =
+  | 'success'
+  | 'not_found'
+  | 'offline'
+  | 'permission_denied'
+  | 'unauthenticated'
+  | 'error';
+
+export interface PreferenceFetchResult {
+  status: PreferenceFetchStatus;
+  data: UserPreferences | null;
+  fromCache?: boolean;
+  errorCode?: string;
+  errorMessage?: string;
 }
 
 export interface JournalMessage {
@@ -41,11 +58,35 @@ export interface JournalMessage {
 
 export type ReflectionMode = 'reflect' | 'summarize' | 'brainstorm' | 'action_items';
 
+export interface LocationMemory {
+  placeId: string;
+  name: string; // e.g. "Absolute Barbecues"
+  formattedAddress: string; // e.g. "102, Avinashi Rd, Peelamedu, Coimbatore, Tamil Nadu 641004"
+  city?: string; // e.g. "Coimbatore"
+  locality?: string;
+  country?: string;
+  lat?: number;
+  lng?: number;
+  taggedAt?: number;
+}
+
+export interface WeatherData {
+  condition: string; // e.g. "Rainy", "Clear", "Partly Cloudy"
+  conditionEmoji: string; // e.g. "🌧️", "☀️", "⛅"
+  temperature: number; // in Celsius (e.g. 27)
+  humidity: number; // percentage (e.g. 82)
+  weatherCode?: number; // Open-Meteo numeric WMO code
+  capturedAt?: number;
+  isBackfilled?: boolean;
+}
+
 export interface EntryMetadata {
   mood?: string;
   tags?: string[];
   category?: string;
   location?: string;
+  placeLocation?: LocationMemory | null;
+  weather?: WeatherData | null;
   sentimentScore?: number;
   wordCount?: number;
   editedAt?: number;
@@ -63,6 +104,47 @@ export interface JournalEntry {
   updatedAt: number;
   editedAt?: number;
   deletedAt?: number | null;
+}
+
+export interface CalendarEventItem {
+  id: string;
+  summary: string;
+  description?: string;
+  location?: string;
+  start: {
+    dateTime?: string;
+    date?: string;
+    timeZone?: string;
+  };
+  end: {
+    dateTime?: string;
+    date?: string;
+    timeZone?: string;
+  };
+  startTimeFormatted: string; // e.g. "9:00 AM"
+  endTimeFormatted?: string;   // e.g. "10:00 AM"
+  timeDisplay: string;         // e.g. "9:00 AM — 10:00 AM" or "9:00 AM"
+  hangoutLink?: string;
+  status?: string;
+  htmlLink?: string;
+}
+
+export interface DaySynthesisData {
+  summary: string;
+  fullMarkdown: string;
+  dayTheme?: string;
+  detectedMood?: string;
+  keyHighlights: string[];
+  scheduleBreakdown: Array<{
+    time: string;
+    event: string;
+    reflection?: string;
+  }>;
+  groundingThought: string;
+  tomorrowIntention?: string;
+  modelUsed: string;
+  isFallback?: boolean;
+  warning?: string;
 }
 
 export interface UserProfile {

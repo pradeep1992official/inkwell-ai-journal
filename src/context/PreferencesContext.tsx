@@ -27,6 +27,10 @@ interface PreferencesContextType {
   unlockApp: () => void;
   updateLockSettings: (newSettings: Partial<LockSettings>) => Promise<void>;
 
+  // Weather Attachment Preference
+  weatherEnabled: boolean;
+  setWeatherEnabled: (enabled: boolean) => Promise<void>;
+
   // Onboarding Tour
   hasCompletedTour: boolean;
   isTourActive: boolean;
@@ -45,9 +49,11 @@ const STORAGE_KEYS = {
   LANGUAGE: 'inkwell_pref_language',
   PRELOGIN_LANG_SELECTED: 'inkwell_prelogin_language_selected',
   LOCK_SETTINGS: 'inkwell_lock_settings',
+  WEATHER_ENABLED: 'inkwell_pref_weather_enabled',
   LAST_ACTIVITY: 'inkwell_last_activity',
   IS_LOCKED: 'inkwell_is_locked',
   HAS_COMPLETED_TOUR: 'inkwell_has_completed_tour',
+  PENDING_PREF_SYNC: 'inkwell_pending_pref_sync',
 };
 
 const DEFAULT_LOCK_SETTINGS: LockSettings = {
@@ -55,6 +61,41 @@ const DEFAULT_LOCK_SETTINGS: LockSettings = {
   pinHash: null,
   autoLockMinutes: 5,
 };
+
+function queueOfflinePreferences(userId: string, prefs: UserPreferences): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const payload = {
+      userId,
+      prefs,
+      queuedAt: Date.now(),
+    };
+    localStorage.setItem(STORAGE_KEYS.PENDING_PREF_SYNC, JSON.stringify(payload));
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[Inkwell Sync] 📦 Queued preferences offline for UID: ${userId}`);
+    }
+  } catch (e) {
+    console.warn('[Inkwell Sync] Could not queue offline preferences to localStorage:', e);
+  }
+}
+
+function getQueuedOfflinePreferences(): { userId: string; prefs: UserPreferences } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.PENDING_PREF_SYNC);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function clearQueuedOfflinePreferences(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(STORAGE_KEYS.PENDING_PREF_SYNC);
+  } catch {}
+}
 
 export function getAutoTheme(): AppTheme {
   const hour = new Date().getHours();
@@ -144,6 +185,17 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [currentTourStep, setCurrentTourStep] = useState<number>(0);
   const tourAutoTriggeredRef = useRef<boolean>(false);
 
+  // Weather Attachment Preference (default true)
+  const [weatherEnabled, setWeatherEnabledState] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEYS.WEATHER_ENABLED);
+        if (stored !== null) return stored === 'true';
+      } catch {}
+    }
+    return true;
+  });
+
   const [isLocked, setIsLocked] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -185,12 +237,16 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
     fontSize: AppFontSize;
     language: AppLanguage;
     lockSettings: LockSettings;
+    hasCompletedTour: boolean;
+    weatherEnabled: boolean;
   }>({
     theme,
     themeMode,
     fontSize,
     language,
     lockSettings,
+    hasCompletedTour,
+    weatherEnabled,
   });
 
   useEffect(() => {
@@ -200,8 +256,10 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
       fontSize,
       language,
       lockSettings,
+      hasCompletedTour,
+      weatherEnabled,
     };
-  }, [theme, themeMode, fontSize, language, lockSettings]);
+  }, [theme, themeMode, fontSize, language, lockSettings, hasCompletedTour, weatherEnabled]);
 
   useEffect(() => {
     currentUserRef.current = currentUser;
@@ -389,14 +447,71 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
     recordActivity,
   ]);
 
-  // Keep currentUser state in sync with Firebase Auth
+  const fetchingUidRef = useRef<string | null>(null);
+  const loadedUidRef = useRef<string | null>(null);
+
+  // Synchronize any pending offline preferences to Firestore when online
+  const flushPendingPreferenceSync = useCallback(async (user?: User | null) => {
+    const activeUser = user || currentUserRef.current;
+    if (!activeUser || !activeUser.uid) return;
+
+    const queued = getQueuedOfflinePreferences();
+    if (queued && queued.userId === activeUser.uid) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[Inkwell Sync] 🔄 Flushing queued offline preferences for UID: ${activeUser.uid}`);
+      }
+      try {
+        const result = await saveUserPreferences(activeUser.uid, queued.prefs);
+        if (result.success) {
+          clearQueuedOfflinePreferences();
+          if (process.env.NODE_ENV !== 'production') {
+            console.log(`[Inkwell Sync] ✅ Queued offline preferences successfully synced to Firestore!`);
+          }
+        }
+      } catch (e) {
+        console.warn('[Inkwell Sync] Failed to sync queued preferences to Firestore:', e);
+      }
+    }
+  }, []);
+
+  // Listen for network online status to flush pending syncs
+  useEffect(() => {
+    const handleOnline = () => {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[Inkwell Network] 🌐 Browser connection restored (online). Checking for queued sync...');
+      }
+      if (currentUserRef.current) {
+        flushPendingPreferenceSync(currentUserRef.current);
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [flushPendingPreferenceSync]);
+
+  // Keep currentUser state in sync with Firebase Auth and log dev state
   useEffect(() => {
     const unsubscribe = subscribeToAuthState((user) => {
       setCurrentUser(user);
       currentUserRef.current = user;
+
+      if (process.env.NODE_ENV !== 'production') {
+        if (user) {
+          console.log(`[Inkwell Auth] State: Authenticated | UID: ${user.uid} | Email: ${user.email || 'N/A'} | Verified: ${user.emailVerified}`);
+        } else {
+          console.log('[Inkwell Auth] State: Signed Out');
+        }
+      }
+
+      if (!user) {
+        loadedUidRef.current = null;
+        fetchingUidRef.current = null;
+      } else {
+        flushPendingPreferenceSync(user);
+      }
     });
     return () => unsubscribe();
-  }, []);
+  }, [flushPendingPreferenceSync]);
 
   // 4. Firestore persistence
   const persistPreferencesToCloud = useCallback(
@@ -410,17 +525,30 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
     ) => {
       const activeUser = user || currentUserRef.current;
       if (!activeUser) return;
+
+      const prefPayload: UserPreferences = {
+        theme: newTheme,
+        themeMode: newThemeMode,
+        fontSize: newFontSize,
+        language: newLang,
+        lockSettings: newLock,
+        hasCompletedTour: prefsRef.current.hasCompletedTour,
+        weatherEnabled: prefsRef.current.weatherEnabled,
+      };
+
       try {
         setIsSavingPrefs(true);
-        await saveUserPreferences(activeUser.uid, {
-          theme: newTheme,
-          themeMode: newThemeMode,
-          fontSize: newFontSize,
-          language: newLang,
-          lockSettings: newLock,
-        });
-      } catch (err) {
-        console.error('Failed to sync user preferences to Firestore:', err);
+        const result = await saveUserPreferences(activeUser.uid, prefPayload);
+        if (result.offlineQueued) {
+          queueOfflinePreferences(activeUser.uid, prefPayload);
+        }
+      } catch (err: any) {
+        const errMsg = String(err?.message || err);
+        if (err?.code === 'unavailable' || errMsg.includes('offline') || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+          queueOfflinePreferences(activeUser.uid, prefPayload);
+        } else {
+          console.error('[Inkwell Preferences] Failed to sync user preferences to Firestore:', err);
+        }
       } finally {
         setIsSavingPrefs(false);
       }
@@ -430,11 +558,35 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // 5. Load preferences from Firestore on login
   const loadUserPreferences = useCallback(
-    async (user: User) => {
+    async (user: User, force = false) => {
+      if (!user || !user.uid) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[Inkwell Auth] State: Unauthenticated');
+        }
+        return;
+      }
+
+      // Prevent duplicate fetch requests during startup / re-renders
+      if (!force && fetchingUidRef.current === user.uid) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[Inkwell Preferences] ⏳ Preference fetch already in flight for UID: ${user.uid}. Skipping duplicate.`);
+        }
+        return;
+      }
+
+      if (!force && loadedUidRef.current === user.uid) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[Inkwell Preferences] ⚡ Preferences already loaded for UID: ${user.uid}. Skipping redundant request.`);
+        }
+        return;
+      }
+
+      fetchingUidRef.current = user.uid;
       setCurrentUser(user);
       currentUserRef.current = user;
+
       try {
-        const cloudPrefs = await getUserPreferences(user.uid);
+        const fetchResult = await getUserPreferences(user.uid);
 
         // Determine user's active/selected language:
         // 1. Explicit pre-login selection
@@ -461,18 +613,34 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
           chosenLang = prefsRef.current.language;
         }
 
-        if (cloudPrefs) {
+        if (fetchResult.status === 'success' && fetchResult.data) {
+          const cloudPrefs = fetchResult.data;
+          loadedUidRef.current = user.uid;
+
           const loadedMode = cloudPrefs.themeMode || 'auto';
           setThemeModeState(loadedMode);
+          try {
+            localStorage.setItem(STORAGE_KEYS.THEME_MODE, loadedMode);
+          } catch {}
 
           if (loadedMode === 'manual' && cloudPrefs.theme && ['light', 'dark', 'paper', 'vellum', 'vivid'].includes(cloudPrefs.theme)) {
             setThemeState(cloudPrefs.theme);
+            try {
+              localStorage.setItem(STORAGE_KEYS.THEME, cloudPrefs.theme);
+            } catch {}
           } else {
-            setThemeState(getAutoTheme());
+            const autoTheme = getAutoTheme();
+            setThemeState(autoTheme);
+            try {
+              localStorage.setItem(STORAGE_KEYS.THEME, autoTheme);
+            } catch {}
           }
 
           if (cloudPrefs.fontSize && ['small', 'medium', 'large'].includes(cloudPrefs.fontSize)) {
             setFontSizeState(cloudPrefs.fontSize);
+            try {
+              localStorage.setItem(STORAGE_KEYS.FONT_SIZE, cloudPrefs.fontSize);
+            } catch {}
           }
 
           // Prioritize explicitly selected language if present, otherwise fallback to cloud setting
@@ -484,10 +652,10 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
             // If cloud prefs differs from chosen language, sync to Firestore
             if (cloudPrefs.language !== chosenLang) {
-              await saveUserPreferences(user.uid, {
+              saveUserPreferences(user.uid, {
                 ...cloudPrefs,
                 language: chosenLang,
-              });
+              }).catch(() => {});
             }
           } else if (cloudPrefs.language && ['en', 'es', 'fr', 'hi', 'ta'].includes(cloudPrefs.language)) {
             setLanguageState(cloudPrefs.language);
@@ -514,6 +682,14 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
             }
           }
 
+          // Check Weather Attachment preference from Firestore
+          if (typeof cloudPrefs.weatherEnabled === 'boolean') {
+            setWeatherEnabledState(cloudPrefs.weatherEnabled);
+            try {
+              localStorage.setItem(STORAGE_KEYS.WEATHER_ENABLED, String(cloudPrefs.weatherEnabled));
+            } catch {}
+          }
+
           // Check Onboarding Tour status from Firestore
           const isTourCompleted = cloudPrefs.hasCompletedTour === true;
           setHasCompletedTourState(isTourCompleted);
@@ -529,21 +705,27 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
               setIsTourActive(true);
             }, 800);
           }
-        } else {
-          // New user sign-in: persist current state (including chosen language)
+
+          // Flush any offline modifications that may be pending
+          flushPendingPreferenceSync(user);
+        } else if (fetchResult.status === 'not_found') {
+          // New user sign-in: persist current state (including chosen language) to Firestore
+          loadedUidRef.current = user.uid;
           const targetLang = chosenLang || prefsRef.current.language;
           setLanguageState(targetLang);
           try {
             localStorage.setItem(STORAGE_KEYS.LANGUAGE, targetLang);
           } catch {}
 
-          await saveUserPreferences(user.uid, {
+          saveUserPreferences(user.uid, {
             theme: prefsRef.current.theme,
             themeMode: prefsRef.current.themeMode,
             fontSize: prefsRef.current.fontSize,
             language: targetLang,
             lockSettings: prefsRef.current.lockSettings,
             hasCompletedTour: false,
+          }).catch((err) => {
+            console.warn('[Inkwell Preferences] Could not sync initial preferences to Firestore (offline or transient):', err);
           });
 
           // Auto-trigger tour for first-time sign-in
@@ -554,12 +736,23 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
               setIsTourActive(true);
             }, 800);
           }
+        } else if (fetchResult.status === 'offline') {
+          if (process.env.NODE_ENV !== 'production') {
+            console.log(`[Inkwell Preferences] 📦 Offline mode: preserving local cache and state for UID: ${user.uid}`);
+          }
+          // Preserve current local state and do not overwrite Firestore with defaults
+        } else if (fetchResult.status === 'permission_denied') {
+          console.error(`[Inkwell Preferences] ⛔ Permission Denied on Firestore preferences for UID: ${user.uid}`);
+        } else {
+          console.warn(`[Inkwell Preferences] ⚠️ Unhandled preference status [${fetchResult.status}]:`, fetchResult.errorMessage);
         }
-      } catch (err) {
-        console.error('Error fetching user settings from Firestore:', err);
+      } catch (err: any) {
+        console.warn('[Inkwell Preferences] Preferences load recovered with local state:', err?.message || err);
+      } finally {
+        fetchingUidRef.current = null;
       }
     },
-    [getLastActivityTimestamp]
+    [getLastActivityTimestamp, flushPendingPreferenceSync]
   );
 
   // 6. Updaters
@@ -707,6 +900,25 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setIsLocked(false);
   }, []);
 
+  // Weather Preference Setter
+  const setWeatherEnabled = useCallback(
+    async (enabled: boolean) => {
+      setWeatherEnabledState(enabled);
+      try {
+        localStorage.setItem(STORAGE_KEYS.WEATHER_ENABLED, String(enabled));
+      } catch {}
+      await persistPreferencesToCloud(
+        prefsRef.current.theme,
+        prefsRef.current.themeMode,
+        prefsRef.current.fontSize,
+        prefsRef.current.language,
+        prefsRef.current.lockSettings,
+        currentUserRef.current
+      );
+    },
+    [persistPreferencesToCloud]
+  );
+
   // 7. Onboarding Tour Control Methods
   const startTour = useCallback((step = 0) => {
     setCurrentTourStep(Math.max(0, Math.min(5, step)));
@@ -783,6 +995,8 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
         lockApp,
         unlockApp,
         updateLockSettings,
+        weatherEnabled,
+        setWeatherEnabled,
         hasCompletedTour,
         isTourActive,
         currentTourStep,

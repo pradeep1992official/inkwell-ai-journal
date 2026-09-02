@@ -37,18 +37,17 @@ function getGenAI(): GoogleGenAI {
 
 // Fallback Model Ladder with official supported models from @google/genai ordered by availability & latency
 const TEXT_FALLBACK_MODELS = [
-  'gemini-3.6-flash',
+  'gemini-3.7-flash',
   'gemini-3.1-flash-lite',
   'gemini-flash-latest',
-  'gemini-3.7-flash',
+  'gemini-3.1-pro-preview',
 ];
 
 const TRANSCRIBE_FALLBACK_MODELS = [
   'gemini-3.5-transcribe',
-  'gemini-3.6-flash',
+  'gemini-3.7-flash',
   'gemini-3.1-flash-lite',
   'gemini-flash-latest',
-  'gemini-3.7-flash',
 ];
 
 interface FallbackOptions {
@@ -722,7 +721,7 @@ Language Directive:
     const primaryUserPrompt = latestUserMsg || '';
 
     let text = '';
-    let modelUsed = 'gemini-3.6-flash';
+    let modelUsed = 'gemini-3.7-flash';
     let isFallback = false;
     let warning: string | undefined = undefined;
     let errorDetails: string | undefined = undefined;
@@ -924,6 +923,338 @@ Guidelines:
   }
 });
 
+// Google Calendar Events Proxy
+app.get('/api/calendar/events', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string || '');
+
+    if (!token) {
+      res.status(401).json({ error: 'OAuth Bearer access token required for Google Calendar.' });
+      return;
+    }
+
+    const timeMin = typeof req.query.timeMin === 'string' ? req.query.timeMin : new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+    const timeMax = typeof req.query.timeMax === 'string' ? req.query.timeMax : new Date(new Date().setHours(23, 59, 59, 999)).toISOString();
+
+    const calendarUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`;
+
+    const gcalResponse = await fetch(calendarUrl, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!gcalResponse.ok) {
+      const errText = await gcalResponse.text();
+      console.warn(`[Google Calendar API] Upstream error status ${gcalResponse.status}: ${errText}`);
+      res.status(gcalResponse.status).json({
+        error: `Google Calendar API error (${gcalResponse.status})`,
+        details: errText,
+      });
+      return;
+    }
+
+    const data: any = await gcalResponse.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+
+    res.json({
+      events: items,
+      count: items.length,
+    });
+  } catch (error: any) {
+    console.error('API /api/calendar/events error:', error);
+    res.status(500).json({
+      error: error?.message || 'Failed to fetch Google Calendar events.',
+    });
+  }
+});
+
+// Helper to generate a grounded fallback day synthesis when Gemini API is offline
+function sanitizeCleanText(val: any): string {
+  if (!val || typeof val !== 'string') return '';
+  return val
+    .replace(/\u00a0/g, ' ')
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+    .replace(/\\n/g, ' ')
+    .replace(/\\\\/g, '')
+    // Strip accidental leading markdown headers, bullets, or numbers
+    .replace(/^(#+\s*|[-*•]\s*|\d+[\.\)]\s*)+/g, '')
+    // Strip wrapping quotes
+    .replace(/^["'`]+|["'`]+$/g, '')
+    // Strip accidental markdown asterisks wrapping text like "**Hello**"
+    .replace(/^\*+([^*]+)\*+$/g, '$1')
+    .trim();
+}
+
+function generateFallbackDayReview(
+  calendarEvents: any[],
+  journalEntries: any[],
+  dateStr: string,
+  userName?: string
+): any {
+  const eventsCount = calendarEvents.length;
+  const journalCount = journalEntries.length;
+  const greetingName = userName ? userName : 'Friend';
+
+  const eventTitles = calendarEvents.map((e) => `${e.startTimeFormatted || e.timeDisplay || ''} ${e.summary || 'Event'}`).filter(Boolean);
+  const eventsListText = eventTitles.length > 0 ? eventTitles.join(', ') : 'open flow';
+
+  const summary = `Today on ${dateStr}, your schedule centered around ${eventsCount > 0 ? `${eventsCount} scheduled milestones (${eventsListText})` : 'an unscheduled self-directed rhythm'}. You recorded ${journalCount > 0 ? `${journalCount} reflective journal logs` : 'moments of contemplation'}. You balanced active engagement with meaningful introspection.`;
+
+  const breakdown = calendarEvents.map((e) => ({
+    time: sanitizeCleanText(e.startTimeFormatted || e.timeDisplay) || 'Scheduled',
+    event: sanitizeCleanText(e.summary) || 'Calendar Event',
+    reflection: sanitizeCleanText(e.description ? `Focused on: ${e.description}` : 'Engaged with intentional presence during this session.'),
+  }));
+
+  const highlights = [
+    eventsCount > 0 ? `Successfully navigated ${eventsCount} scheduled sessions including ${calendarEvents[0]?.summary || 'morning commitments'}.` : 'Maintained mindful flexibility throughout the day.',
+    journalCount > 0 ? 'Documented key emotional signals and conscious reflections in Inkwell.' : 'Took deliberate pauses for self-awareness.',
+    'Closed the day with mindful alignment between outer obligations and inner calm.',
+  ];
+
+  const dayTheme = 'Balanced Engagement & Purposeful Progress';
+  const detectedMood = 'Focused & Grounded';
+  const groundingThought = 'Celebrate both the tasks accomplished on your calendar and the quiet realizations captured in your thoughts.';
+  const tomorrowIntention = 'Carry forward the momentum of today while holding space for intentional breath and rest.';
+
+  const fullMarkdown = `### 🌅 Day Review: ${dateStr}
+
+**Theme**: ${dayTheme}  
+**Emotional Arc**: ${detectedMood}
+
+#### 📝 Executive Day Summary
+${summary}
+
+#### 📅 Schedule & Timeline Reflections
+${breakdown.map((e) => `- **${e.time}** — **${e.event}**\n  *${e.reflection}*`).join('\n\n') || '- *Open unscheduled day*'}
+
+#### ✨ Key Realizations & Breakthroughs
+${highlights.map((h) => `- ${h}`).join('\n')}
+
+#### 🌿 Evening Grounding
+> "${groundingThought}"
+
+#### 🎯 Tomorrow's Intention
+*${tomorrowIntention}*`;
+
+  return {
+    summary,
+    fullMarkdown,
+    dayTheme,
+    detectedMood,
+    keyHighlights: highlights,
+    scheduleBreakdown: breakdown,
+    groundingThought,
+    tomorrowIntention,
+    modelUsed: 'Inkwell Day Engine',
+    isFallback: true,
+  };
+}
+
+// Google Calendar + Journal Day Synthesis ("How was my day?")
+app.post('/api/calendar/synthesize-day', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const dateStr = typeof body.date === 'string' ? body.date : 'Today';
+    const calendarEvents: any[] = Array.isArray(body.calendarEvents) ? body.calendarEvents : [];
+    const journalEntries: any[] = Array.isArray(body.journalEntries) ? body.journalEntries : [];
+    const language = typeof body.language === 'string' ? body.language : 'en';
+    const userName = typeof body.userName === 'string' ? body.userName : undefined;
+
+    const langName = language === 'es' ? 'Spanish' : language === 'fr' ? 'French' : language === 'hi' ? 'Hindi' : language === 'ta' ? 'Tamil' : 'English';
+
+    // Format calendar events safely for LLM context
+    const calendarFormatted = calendarEvents.map((ev, i) => {
+      const time = ev.startTimeFormatted || ev.timeDisplay || 'Time unspecified';
+      const summary = (ev.summary || 'Untitled Event').replace(/[<>]/g, '');
+      const desc = ev.description ? ` (Details: ${(ev.description || '').replace(/[<>]/g, '').slice(0, 150)})` : '';
+      const loc = ev.location ? ` [Location: ${(ev.location || '').replace(/[<>]/g, '')}]` : '';
+      return `${i + 1}. ${time} — ${summary}${loc}${desc}`;
+    }).join('\n');
+
+    // Format journal entries safely for LLM context
+    const journalFormatted = journalEntries.map((entry, i) => {
+      const title = entry.title ? `"${entry.title}"` : `Entry #${i + 1}`;
+      const text = (entry.text || '').replace(/[<>]/g, '').slice(0, 800);
+      const mood = entry.mood ? ` [Mood: ${entry.mood}]` : '';
+      return `--- Entry ${title}${mood} ---\n${text}`;
+    }).join('\n\n');
+
+    const prompt = `You are Inkwell's Master Day Synthesizer and Mindful Reflection Companion.
+The user is asking: "How was my day?"
+
+Context for ${dateStr}:
+<calendar_schedule>
+${calendarFormatted || 'No calendar events recorded for today (open schedule).'}
+</calendar_schedule>
+
+<journal_reflections>
+${journalFormatted || 'No journal entries recorded for today.'}
+</journal_reflections>
+
+Task:
+Analyze and synthesize the user's day by cross-referencing what was scheduled on their Google Calendar (e.g. meetings, classes, reviews, appointments) with what they actually experienced, felt, and reflected upon in their journal entries.
+
+IMPORTANT FORMATTING RULES:
+- Do NOT use markdown symbols, asterisks (** or *), or escape slashes (\\) inside string fields.
+- Do NOT prefix "keyHighlights" with bullet points, hyphens, numbers, or dashes; return clean, natural prose statements.
+- "dayTheme" should be a clean, inspiring title (4-8 words).
+- "detectedMood" should be 1-2 words (e.g. "Focused & Grounded").
+- "summary" should be a beautifully written 2-3 sentence executive synthesis in natural flowing text.
+- "groundingThought" should be a gentle, warm closing insight without quote marks or asterisks.
+- "tomorrowIntention" should be a concise, mindful intention for tomorrow.
+
+Respond with a JSON object in ${langName} with keys:
+1. "dayTheme": string
+2. "detectedMood": string
+3. "summary": string
+4. "keyHighlights": array of 3-4 clean strings
+5. "scheduleBreakdown": array of objects { "time": string, "event": string, "reflection": string }
+6. "groundingThought": string
+7. "tomorrowIntention": string
+8. "fullMarkdown": string (A neatly structured Markdown presentation with headers, schedule bullets, and grounding block)`;
+
+    try {
+      const { text, modelUsed } = await generateContentWithFallback({
+        contents: prompt,
+        responseMimeType: 'application/json',
+        systemInstruction: `You are Inkwell's Day Synthesizer. Connect Google Calendar schedules with personal journal reflections to provide empathetic, perceptive, and inspiring daily reviews. Answer the question "How was my day?" with neat formatting and warmth in ${langName}. Avoid markdown formatting tags inside plain string fields.`,
+        temperature: 0.4,
+      });
+
+      const parsed = JSON.parse(text);
+
+      const dayTheme = sanitizeCleanText(parsed.dayTheme) || 'Balanced Flow & Purpose';
+      const detectedMood = sanitizeCleanText(parsed.detectedMood) || 'Grounded & Reflective';
+      const summary = sanitizeCleanText(parsed.summary) || 'A meaningful day marked by conscious progress and personal reflection.';
+      const groundingThought = sanitizeCleanText(parsed.groundingThought) || 'Rest peacefully knowing that each moment today nurtured your resilience.';
+      const tomorrowIntention = sanitizeCleanText(parsed.tomorrowIntention) || 'Begin tomorrow with clarity, focus, and mindful calm.';
+
+      const keyHighlights = (Array.isArray(parsed.keyHighlights) ? parsed.keyHighlights : [])
+        .map(sanitizeCleanText)
+        .filter(Boolean);
+
+      const scheduleBreakdown = (Array.isArray(parsed.scheduleBreakdown) ? parsed.scheduleBreakdown : [])
+        .map((item: any) => ({
+          time: sanitizeCleanText(item.time) || 'Scheduled',
+          event: sanitizeCleanText(item.event) || 'Milestone',
+          reflection: sanitizeCleanText(item.reflection) || '',
+        }))
+        .filter((item: any) => Boolean(item.event));
+
+      const cleanFullMarkdown = `### 🌅 Day Review: ${dateStr}
+
+**Theme**: ${dayTheme}  
+**Emotional Arc**: ${detectedMood}
+
+#### 📝 Executive Day Summary
+${summary}
+
+#### 📅 Schedule & Timeline Reflections
+${scheduleBreakdown.map((s: any) => `- **${s.time}** — **${s.event}**\n  *${s.reflection}*`).join('\n\n') || '- *Unscheduled self-directed day*'}
+
+#### ✨ Key Realizations & Breakthroughs
+${keyHighlights.map((h: string) => `- ${h}`).join('\n')}
+
+#### 🌿 Evening Grounding
+> "${groundingThought}"
+
+#### 🎯 Tomorrow's Intention
+*${tomorrowIntention}*`.trim();
+
+      res.json({
+        dayTheme,
+        detectedMood,
+        summary,
+        keyHighlights,
+        scheduleBreakdown,
+        groundingThought,
+        tomorrowIntention,
+        fullMarkdown: cleanFullMarkdown,
+        modelUsed,
+        isFallback: false,
+      });
+    } catch (genErr: any) {
+      console.error('[Gemini Day Synthesis Failed]:', genErr?.message || genErr);
+      const errInfo = extractErrorSummary(genErr);
+      const fallback = generateFallbackDayReview(calendarEvents, journalEntries, dateStr, userName);
+      res.json({
+        ...fallback,
+        modelUsed: `Offline Day Synthesis (${errInfo.summary})`,
+        isFallback: true,
+        warning: errInfo.summary,
+        errorDetails: errInfo.details,
+      });
+    }
+  } catch (error: any) {
+    console.error('API /api/calendar/synthesize-day error:', error);
+    res.status(500).json({
+      error: error?.message || 'Failed to synthesize day.',
+    });
+  }
+});
+
+// Google Places API (New) Autocomplete Proxy with Key Isolation & Rate/Cost Protection
+app.post('/api/places/autocomplete', async (req: Request, res: Response) => {
+  try {
+    const rawInput = req.body?.input;
+    const input = typeof rawInput === 'string' ? rawInput.trim().slice(0, 150) : '';
+    const sessionToken = req.body?.sessionToken || `session-${Date.now()}`;
+
+    if (!input) {
+      return res.json({ predictions: [] });
+    }
+
+    const placesApiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.PLACES_API_KEY || '';
+
+    if (placesApiKey) {
+      try {
+        // Call Google Places API (New) Autocomplete REST endpoint
+        const placesRes = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': placesApiKey,
+            'X-Goog-FieldMask': 'suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat',
+          },
+          body: JSON.stringify({
+            input,
+            sessionToken,
+          }),
+        });
+
+        if (placesRes.ok) {
+          const placesData = await placesRes.json();
+          const suggestions = (placesData.suggestions || []).map((s: any) => {
+            const p = s.placePrediction;
+            return {
+              placeId: p?.placeId || p?.place || `place-${Math.random().toString(36).substr(2, 6)}`,
+              name: p?.structuredFormat?.mainText?.text || p?.text?.text || input,
+              formattedAddress: p?.text?.text || p?.structuredFormat?.secondaryText?.text || input,
+              locality: p?.structuredFormat?.secondaryText?.text,
+            };
+          });
+
+          return res.json({ predictions: suggestions });
+        } else {
+          console.warn('[Places API] Google Places API response status:', placesRes.status);
+        }
+      } catch (apiErr) {
+        console.warn('[Places API] Call error, delegating to client fallback:', apiErr);
+      }
+    }
+
+    return res.json({ predictions: [] });
+  } catch (err: any) {
+    console.error('API /api/places/autocomplete error:', err);
+    res.status(500).json({ error: err?.message || 'Failed to autocomplete places' });
+  }
+});
+
 // Vite middleware setup
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
@@ -934,8 +1265,23 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    app.use(express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        } else if (filePath.includes(path.sep + 'assets' + path.sep) || filePath.includes('/assets/')) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    }));
+
+    // Prevent SPA fallback for missing assets or JS/CSS files so they do not return HTML with 200 MIME error
+    app.get('/assets/*', (req: Request, res: Response) => {
+      res.status(404).type('text/plain').send('Asset not found');
+    });
+
     app.get('*', (req: Request, res: Response) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

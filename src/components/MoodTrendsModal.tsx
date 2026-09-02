@@ -13,10 +13,12 @@ import {
   ChevronRight,
   ShieldCheck,
   Flame,
-  Heart
+  Heart,
+  CloudSun
 } from 'lucide-react';
 import { JournalEntry } from '../types';
 import { usePreferences } from '../context/PreferencesContext';
+import { analyzeWeatherPatterns } from '../lib/weatherService';
 
 export type MoodTimeRange = '14d' | '30d' | '90d' | 'all';
 
@@ -240,6 +242,9 @@ export const MoodTrendsModal: React.FC<MoodTrendsModalProps> = ({
       distribution: list,
     };
   }, [filteredData]);
+
+  // Statistical observational analysis of reflection length and mood across weather conditions
+  const weatherPatterns = useMemo(() => analyzeWeatherPatterns(entries), [entries]);
 
   if (!isOpen) return null;
 
@@ -747,6 +752,92 @@ export const MoodTrendsModal: React.FC<MoodTrendsModalProps> = ({
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* Ambient Weather & Writing Patterns (Open-Meteo Insight) */}
+          {weatherPatterns && (
+            <div id="card-weather-patterns" className="p-4 sm:p-5 rounded-3xl theme-bg-subtle border theme-border shadow-xs space-y-3.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                    <CloudSun className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold theme-text-primary">
+                      Ambient Weather Patterns
+                    </h4>
+                    <p className="text-[10px] theme-text-secondary">
+                      Correlating reflections with open atmospheric conditions
+                    </p>
+                  </div>
+                </div>
+
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20">
+                  {weatherPatterns.totalWeatherEntries} {weatherPatterns.totalWeatherEntries === 1 ? 'entry' : 'entries'} with weather
+                </span>
+              </div>
+
+              {weatherPatterns.hasSufficientData ? (
+                <div className="space-y-3">
+                  {/* Primary & Secondary Factual Observation */}
+                  <div className="p-3 rounded-2xl bg-sky-500/5 dark:bg-sky-500/10 border border-sky-500/20 text-xs text-sky-900 dark:text-sky-200 leading-relaxed font-medium">
+                    {weatherPatterns.primaryObservation}
+                    {weatherPatterns.secondaryObservation && (
+                      <span className="block mt-1 font-normal opacity-90">
+                        {weatherPatterns.secondaryObservation}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Weather Condition Breakdown Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {weatherPatterns.conditionBreakdown.map((item) => (
+                      <div
+                        key={item.label}
+                        className="p-3 rounded-2xl theme-bg-surface border theme-border flex items-center justify-between gap-2 shadow-2xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xl shrink-0" role="img" aria-label={item.label}>
+                            {item.emoji}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold theme-text-primary truncate">
+                              {item.label}
+                            </p>
+                            <p className="text-[10px] theme-text-secondary">
+                              {item.count} {item.count === 1 ? 'reflection' : 'reflections'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-bold theme-text-primary">
+                            ~{item.avgWords} <span className="text-[10px] font-normal theme-text-secondary">words</span>
+                          </p>
+                          {item.topMood && (
+                            <p className="text-[10px] text-sky-600 dark:text-sky-400 font-medium">
+                              Top: {item.topMood}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-2xl theme-bg-surface border theme-border text-xs theme-text-secondary flex items-start gap-2.5 leading-relaxed">
+                  <Info className="w-4 h-4 text-sky-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium theme-text-primary">
+                      {weatherPatterns.primaryObservation}
+                    </p>
+                    <p className="text-[11px] mt-1 opacity-80">
+                      As you create reflections with weather attached or backfill historical entries with attached places, factual correlations between ambient weather and reflection depth will appear here.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

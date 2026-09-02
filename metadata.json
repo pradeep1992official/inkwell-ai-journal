@@ -1,6 +1,6 @@
 {
   "name": "Inkwell",
   "description": "A calm, paper-inspired AI reflection journal and mindful writing space powered by Gemini and Cloud Firestore with Google Authentication.",
-  "requestFramePermissions": ["microphone"],
+  "requestFramePermissions": ["microphone", "geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

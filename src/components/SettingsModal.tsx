@@ -19,11 +19,15 @@ import {
   ExternalLink,
   KeyRound,
   AlertCircle,
-  Trash2
+  Trash2,
+  CloudSun,
+  Loader2
 } from 'lucide-react';
 import { usePreferences } from '../context/PreferencesContext';
 import { AppTheme, AppFontSize, AppLanguage, JournalEntry } from '../types';
 import { hashPin } from '../lib/lockService';
+import { fetchHistoricalWeather, resolveCoordinatesForEntry } from '../lib/weatherService';
+import { saveJournalEntry } from '../lib/firestoreService';
 import { DeleteAccountModal } from './DeleteAccountModal';
 import { ImportDataModal } from './ImportDataModal';
 
@@ -57,6 +61,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setLanguage, 
     lockSettings,
     updateLockSettings,
+    weatherEnabled,
+    setWeatherEnabled,
     t,
     isSavingPrefs 
   } = usePreferences();
@@ -68,6 +74,66 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [pinSuccess, setPinSuccess] = useState(false);
   const [deleteAccountModalOpen, setDeleteAccountModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
+
+  // Weather Backfill state
+  const [isBackfilling, setIsBackfilling] = useState(false);
+  const [backfillProgress, setBackfillProgress] = useState<{ current: number; total: number } | null>(null);
+  const [backfillResult, setBackfillResult] = useState<{ updated: number; failed: number } | null>(null);
+
+  // Eligible reflections for weather backfill:
+  // Must be active (not deleted), lacking weather, and having identifiable coordinates via attached place or recognized city.
+  const eligibleBackfillEntries = entries.filter(
+    (e) => !e.deletedAt && !e.metadata?.weather && resolveCoordinatesForEntry(e) !== null
+  );
+
+  const handleBackfillWeather = async () => {
+    if (isBackfilling || !userId || eligibleBackfillEntries.length === 0) return;
+
+    setIsBackfilling(true);
+    setBackfillResult(null);
+    setBackfillProgress({ current: 0, total: eligibleBackfillEntries.length });
+
+    let updatedCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < eligibleBackfillEntries.length; i++) {
+      const entry = eligibleBackfillEntries[i];
+      setBackfillProgress({ current: i + 1, total: eligibleBackfillEntries.length });
+
+      try {
+        const coords = resolveCoordinatesForEntry(entry);
+        if (coords) {
+          const timestamp = entry.createdAt || entry.updatedAt || Date.now();
+          const weatherData = await fetchHistoricalWeather(coords.lat, coords.lng, timestamp);
+          if (weatherData) {
+            const updated: JournalEntry = {
+              ...entry,
+              metadata: {
+                ...entry.metadata,
+                weather: weatherData,
+              },
+            };
+            await saveJournalEntry(userId, updated);
+            updatedCount++;
+          } else {
+            failedCount++;
+          }
+        } else {
+          failedCount++;
+        }
+      } catch (err) {
+        console.warn('Failed to backfill weather for entry:', entry.id, err);
+        failedCount++;
+      }
+
+      // Small delay to respect Open-Meteo fair use
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+
+    setBackfillResult({ updated: updatedCount, failed: failedCount });
+    setIsBackfilling(false);
+    setBackfillProgress(null);
+  };
 
   // Close on Escape key
   useEffect(() => {
@@ -520,6 +586,120 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Section: Ambient Weather & Context (Open-Meteo) */}
+          <div className="pt-4 border-t theme-border space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-semibold theme-text-secondary uppercase tracking-wider">
+                <CloudSun className="w-3.5 h-3.5 text-sky-500" />
+                <span>Ambient Weather & Context</span>
+              </div>
+
+              {/* Toggle Switch */}
+              <button
+                type="button"
+                id="btn-toggle-weather-enabled"
+                onClick={() => setWeatherEnabled(!weatherEnabled)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 ${
+                  weatherEnabled ? 'bg-sky-600' : 'bg-neutral-300 dark:bg-neutral-700'
+                }`}
+                role="switch"
+                aria-checked={weatherEnabled}
+                title={weatherEnabled ? 'Disable automatic weather' : 'Enable automatic weather'}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    weatherEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <p className="text-[11px] theme-text-secondary leading-relaxed">
+              Enrich new reflections with ambient conditions (condition, temperature, humidity) using the Open-Meteo API. Derived weather only; raw coordinates are never stored unless location-tagging is explicitly used.
+            </p>
+
+            {/* Backfill Historical Weather Action Card */}
+            <div className="p-3.5 rounded-2xl theme-bg-subtle border theme-border space-y-2.5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-semibold theme-text-primary">Add Weather to Past Entries</p>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      eligibleBackfillEntries.length > 0
+                        ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20'
+                        : 'theme-bg-surface theme-text-secondary border theme-border'
+                    }`}>
+                      {eligibleBackfillEntries.length > 0
+                        ? `${eligibleBackfillEntries.length} eligible`
+                        : 'All up-to-date'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] theme-text-secondary mt-0.5 leading-relaxed">
+                    Backfill past reflections that have an associated place or city tag via Open-Meteo's Archive API. Reflections without known location coordinates are safely preserved without modification.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  id="btn-backfill-past-weather"
+                  onClick={handleBackfillWeather}
+                  disabled={isBackfilling || eligibleBackfillEntries.length === 0}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 shadow-2xs ${
+                    eligibleBackfillEntries.length > 0 && !isBackfilling
+                      ? 'bg-sky-600 hover:bg-sky-700 text-white active:scale-95'
+                      : 'theme-bg-surface theme-text-secondary opacity-50 cursor-not-allowed border theme-border'
+                  }`}
+                >
+                  {isBackfilling ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Backfilling...</span>
+                    </>
+                  ) : (
+                    <span>Add Weather</span>
+                  )}
+                </button>
+              </div>
+
+              {/* Backfill Live Progress Indicator */}
+              {isBackfilling && backfillProgress && (
+                <div className="pt-2 border-t theme-border space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] theme-text-secondary">
+                    <span>Backfilling reflection {backfillProgress.current} of {backfillProgress.total}...</span>
+                    <span>{Math.round((backfillProgress.current / backfillProgress.total) * 100)}%</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
+                    <div
+                      className="h-full bg-sky-500 rounded-full transition-all duration-200"
+                      style={{ width: `${(backfillProgress.current / backfillProgress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Backfill Result Toast/Badge */}
+              {backfillResult && !isBackfilling && (
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 text-xs flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>
+                      Successfully added historical weather to {backfillResult.updated} {backfillResult.updated === 1 ? 'reflection' : 'reflections'}
+                      {backfillResult.failed > 0 ? ` (${backfillResult.failed} skipped/unavailable)` : ''}.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setBackfillResult(null)}
+                    className="p-1 hover:bg-emerald-500/15 rounded-lg text-emerald-700 dark:text-emerald-300"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
