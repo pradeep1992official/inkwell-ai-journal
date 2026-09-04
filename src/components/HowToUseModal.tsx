@@ -524,6 +524,14 @@ export const HowToUseModal: React.FC<HowToUseModalProps> = ({
                       <kbd className="px-2 py-1 rounded bg-black/10 dark:bg-white/10 font-mono text-[11px] font-bold">Esc</kbd>
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-xl theme-bg-subtle border theme-border text-xs">
+                      <span className="font-medium theme-text-primary">Lock Journal Manually</span>
+                      <div className="flex items-center gap-1.5">
+                        <kbd className="px-2 py-1 rounded bg-black/10 dark:bg-white/10 font-mono text-[11px] font-bold">Alt + L</kbd>
+                        <span className="text-[10px] theme-text-secondary">or</span>
+                        <kbd className="px-2 py-1 rounded bg-black/10 dark:bg-white/10 font-mono text-[11px] font-bold">Ctrl + Shift + L</kbd>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between p-3 rounded-xl theme-bg-subtle border theme-border text-xs">
                       <span className="font-medium theme-text-primary">Focus Mode (Distraction-Free)</span>
                       <span className="text-[11px] theme-text-secondary">Toolbar Options (⋯) → Focus Mode</span>
                     </div>

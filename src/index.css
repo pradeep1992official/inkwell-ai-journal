@@ -390,6 +390,53 @@ html[data-language="hi"] .prose-reflection h4 {
   margin: 0.85rem 0;
 }
 
+/* Inline & Compact Markdown for Banners, Alerts, Toasts, and Preview Cards */
+.prose-inline p,
+.prose-inline blockquote,
+.prose-inline ul,
+.prose-inline ol {
+  display: inline;
+  margin: 0;
+  padding: 0;
+}
+
+.prose-inline hr {
+  display: none;
+}
+
+.prose-inline strong {
+  font-weight: 700;
+}
+
+.prose-inline em {
+  font-style: italic;
+}
+
+.prose-preview p,
+.prose-preview blockquote,
+.prose-preview ul,
+.prose-preview ol,
+.prose-preview li {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none !important;
+  list-style: none;
+}
+
+.prose-preview hr {
+  display: none;
+}
+
+.prose-preview strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.prose-preview em {
+  font-style: italic;
+}
+
 /* Gemini Signature Gradient Text */
 .gemini-gradient-text {
   background: linear-gradient(135deg, #1A73E8 0%, #8E24AA 50%, #E91E63 100%);

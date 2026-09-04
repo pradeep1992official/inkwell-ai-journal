@@ -14,11 +14,22 @@ import {
   ShieldCheck,
   Flame,
   Heart,
-  CloudSun
+  CloudSun,
+  Share2,
+  FileDown,
+  Image as ImageIcon,
+  Check,
+  Loader2,
+  Lock
 } from 'lucide-react';
 import { JournalEntry } from '../types';
 import { usePreferences } from '../context/PreferencesContext';
 import { analyzeWeatherPatterns } from '../lib/weatherService';
+import {
+  exportMoodTrendsToPdf,
+  exportMoodTrendsToPng,
+  MoodTrendsExportData,
+} from '../lib/exportService';
 
 export type MoodTimeRange = '14d' | '30d' | '90d' | 'all';
 
@@ -176,6 +187,9 @@ export const MoodTrendsModal: React.FC<MoodTrendsModalProps> = ({
   const { t, language } = usePreferences();
   const [timeRange, setTimeRange] = useState<MoodTimeRange>('30d');
   const [activeTab, setActiveTab] = useState<'timeline' | 'frequency'>('timeline');
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState<'pdf' | 'png' | null>(null);
+  const [exportSuccessMsg, setExportSuccessMsg] = useState<string | null>(null);
   const [hoveredEntry, setHoveredEntry] = useState<{
     id: string;
     title: string;
@@ -187,6 +201,16 @@ export const MoodTrendsModal: React.FC<MoodTrendsModalProps> = ({
     x: number;
     y: number;
   } | null>(null);
+
+  const timeRangeLabels: Record<MoodTimeRange, string> = useMemo(
+    () => ({
+      '14d': t.timeRange2Weeks || 'Last 2 Weeks',
+      '30d': t.timeRange1Month || 'Last Month',
+      '90d': t.timeRange3Months || 'Last 3 Months',
+      all: t.timeRangeAllTime || 'All Time',
+    }),
+    [t]
+  );
 
   // Filter entries according to active scope and exclude soft-deleted ones
   const filteredData = useMemo(() => {
@@ -299,13 +323,46 @@ export const MoodTrendsModal: React.FC<MoodTrendsModalProps> = ({
       ? `${pathD} L ${chartPoints[chartPoints.length - 1].x} ${svgHeight - paddingY + 10} L ${chartPoints[0].x} ${svgHeight - paddingY + 10} Z`
       : '';
 
+  const handleExport = async (format: 'pdf' | 'png') => {
+    try {
+      setExportingFormat(format);
+      const payload: MoodTrendsExportData = {
+        timeRange,
+        timeRangeLabel: timeRangeLabels[timeRange],
+        activeTab,
+        stats,
+        chartPoints,
+        filteredEntries: filteredData,
+        weatherPatterns,
+        language,
+      };
+
+      if (format === 'pdf') {
+        await exportMoodTrendsToPdf(payload);
+        setExportSuccessMsg('PDF Report exported successfully!');
+      } else {
+        await exportMoodTrendsToPng(payload);
+        setExportSuccessMsg('Chart image (PNG) exported successfully!');
+      }
+
+      setTimeout(() => {
+        setExportSuccessMsg(null);
+        setShowExportModal(false);
+      }, 1800);
+    } catch (err) {
+      console.error('Failed to export mood trends:', err);
+    } finally {
+      setExportingFormat(null);
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/40 dark:bg-black/75 backdrop-blur-xs animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl theme-bg-surface border theme-border rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden theme-text-primary transition-all animate-in zoom-in-95 duration-150"
+        className="w-full max-w-3xl theme-bg-surface border theme-border rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden theme-text-primary transition-all animate-in zoom-in-95 duration-150 relative"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -329,14 +386,26 @@ export const MoodTrendsModal: React.FC<MoodTrendsModalProps> = ({
             </div>
           </div>
 
-          <button
-            id="btn-close-mood-trends"
-            onClick={onClose}
-            title={t.dismiss}
-            className="p-2 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:theme-bg-hover transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              id="btn-open-mood-export"
+              onClick={() => setShowExportModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold theme-bg-surface hover:theme-bg-hover border theme-border theme-text-primary transition-all shadow-2xs active:scale-95"
+              title="Export or share mood trends report"
+            >
+              <Share2 className="w-3.5 h-3.5 text-[#1A73E8] dark:text-[#E8A33D]" />
+              <span className="hidden sm:inline">Export / Share</span>
+            </button>
+
+            <button
+              id="btn-close-mood-trends"
+              onClick={onClose}
+              title={t.dismiss}
+              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:theme-bg-hover transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content Area */}
@@ -854,7 +923,16 @@ export const MoodTrendsModal: React.FC<MoodTrendsModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-3.5 sm:p-4 border-t theme-border flex items-center justify-end theme-bg-subtle shrink-0">
+        <div className="p-3.5 sm:p-4 border-t theme-border flex items-center justify-between theme-bg-subtle shrink-0">
+          <button
+            id="btn-open-mood-export-footer"
+            onClick={() => setShowExportModal(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold theme-bg-surface hover:theme-bg-hover border theme-border theme-text-primary transition-all shadow-xs active:scale-95"
+          >
+            <Share2 className="w-3.5 h-3.5 text-[#1A73E8] dark:text-[#E8A33D]" />
+            <span>Export / Share Report</span>
+          </button>
+
           <button
             id="btn-close-mood-trends-footer"
             onClick={onClose}
@@ -863,6 +941,142 @@ export const MoodTrendsModal: React.FC<MoodTrendsModalProps> = ({
             {t.dismiss || 'Close'}
           </button>
         </div>
+
+        {/* Export / Share Modal Overlay */}
+        <AnimatePresence>
+          {showExportModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-20 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6"
+              onClick={() => setShowExportModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="w-full max-w-lg theme-bg-surface border theme-border rounded-3xl shadow-2xl overflow-hidden p-5 sm:p-6 space-y-4 text-left"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Export Modal Header */}
+                <div className="flex items-center justify-between pb-2 border-b theme-border">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-blue-500/10 dark:bg-amber-500/15 flex items-center justify-center text-[#1A73E8] dark:text-[#E8A33D]">
+                      <Share2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm sm:text-base theme-text-primary">
+                        Export Mood Trends View
+                      </h4>
+                      <p className="text-[11px] theme-text-secondary">
+                        Scope: {timeRangeLabels[timeRange]} ({filteredData.length} reflections)
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    id="btn-close-export-dialog"
+                    onClick={() => setShowExportModal(false)}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:theme-bg-hover transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Format Options */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {/* Option 1: PDF */}
+                  <div className="p-3.5 rounded-2xl border theme-border theme-bg-subtle flex flex-col justify-between space-y-3 hover:border-blue-500/40 dark:hover:border-amber-500/40 transition-all">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+                          <FileDown className="w-4 h-4" />
+                        </div>
+                        <h5 className="font-bold text-xs sm:text-sm theme-text-primary">
+                          Printable PDF
+                        </h5>
+                      </div>
+                      <p className="text-[11px] theme-text-secondary leading-relaxed">
+                        Full report with metrics, chart visualization, mood frequency table, chronological reflection sequence, and weather correlations.
+                      </p>
+                    </div>
+
+                    <button
+                      id="btn-export-pdf"
+                      disabled={exportingFormat !== null}
+                      onClick={() => handleExport('pdf')}
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-[#1A73E8] dark:bg-[#E8A33D] text-white dark:text-[#171310] hover:opacity-90 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                    >
+                      {exportingFormat === 'pdf' ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Generating PDF...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FileDown className="w-3.5 h-3.5" />
+                          <span>Download PDF</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Option 2: Image (PNG) */}
+                  <div className="p-3.5 rounded-2xl border theme-border theme-bg-subtle flex flex-col justify-between space-y-3 hover:border-purple-500/40 dark:hover:border-amber-500/40 transition-all">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                          <ImageIcon className="w-4 h-4" />
+                        </div>
+                        <h5 className="font-bold text-xs sm:text-sm theme-text-primary">
+                          Chart Image (PNG)
+                        </h5>
+                      </div>
+                      <p className="text-[11px] theme-text-secondary leading-relaxed">
+                        High-resolution client-side canvas capture of the current {activeTab === 'timeline' ? 'trajectory' : 'frequency'} chart with Inkwell watermark.
+                      </p>
+                    </div>
+
+                    <button
+                      id="btn-export-png"
+                      disabled={exportingFormat !== null}
+                      onClick={() => handleExport('png')}
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold theme-bg-surface hover:theme-bg-hover border theme-border theme-text-primary transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                    >
+                      {exportingFormat === 'png' ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Rendering PNG...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ImageIcon className="w-3.5 h-3.5 text-purple-500" />
+                          <span>Download PNG</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Non-blocking Privacy Reminder Notice */}
+                <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
+                  <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold">Privacy Reminder:</span> This export contains your personal mood data — only share it if you're comfortable.
+                  </div>
+                </div>
+
+                {/* Success Toast */}
+                {exportSuccessMsg && (
+                  <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 animate-in fade-in">
+                    <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>{exportSuccessMsg}</span>
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

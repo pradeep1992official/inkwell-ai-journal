@@ -32,13 +32,17 @@ import {
   MoreVertical,
   Sparkles,
   Pencil,
-  TrendingUp,
   MapPin,
-  CloudSun
+  CloudSun,
+  Camera,
+  Image as ImageIcon,
+  UploadCloud
 } from 'lucide-react';
-import { JournalEntry, JournalMessage, ReflectionMode, LocationMemory, WeatherData } from '../types';
+import { JournalEntry, JournalMessage, ReflectionMode, LocationMemory, WeatherData, AttachedImage } from '../types';
 import { saveJournalEntry } from '../lib/firestoreService';
+import { generateEntryEmbedding } from '../lib/semanticSearchService';
 import { fetchCurrentWeather } from '../lib/weatherService';
+import { uploadEntryImage, deleteEntryImage, validateImageFile } from '../lib/storageService';
 import { InsightsModal, InsightsData } from './InsightsModal';
 import { ExportVaultModal } from './ExportVaultModal';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
@@ -53,7 +57,6 @@ interface JournalEditorProps {
   onDeleteEntry: (id: string) => Promise<void>;
   focusMode?: boolean;
   onToggleFocusMode?: () => void;
-  onOpenMoodTrends?: () => void;
 }
 
 // Sentence Case formatting helper for personalized greeting
@@ -96,12 +99,13 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   onDeleteEntry,
   focusMode = false,
   onToggleFocusMode,
-  onOpenMoodTrends,
 }) => {
   const { t, language, weatherEnabled } = usePreferences();
   const [inputText, setInputText] = useState('');
   const [selectedMode, setSelectedMode] = useState<ReflectionMode>('reflect');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -156,6 +160,13 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   // Location Picker Modal state
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
 
+  // Attached Image state
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadProgressMsg, setUploadProgressMsg] = useState('Optimizing photo...');
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [showImageZoomModal, setShowImageZoomModal] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Dropdown States for grouped options
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [isMoodOpen, setIsMoodOpen] = useState(false);
@@ -194,6 +205,30 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       document.removeEventListener('keydown', handleEscape);
     };
   }, []);
+
+  // Sample Entry Companion Card dismiss state
+  const [isSampleCardDismissed, setIsSampleCardDismissed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(`inkwell_dismissed_sample_${entry.id}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      setIsSampleCardDismissed(localStorage.getItem(`inkwell_dismissed_sample_${entry.id}`) === 'true');
+    } catch {
+      setIsSampleCardDismissed(false);
+    }
+  }, [entry.id]);
+
+  const handleDismissSampleCard = () => {
+    setIsSampleCardDismissed(true);
+    try {
+      localStorage.setItem(`inkwell_dismissed_sample_${entry.id}`, 'true');
+    } catch {}
+  };
 
   // Preloaded voices for TTS
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -613,6 +648,25 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       onEntryUpdated(updated);
       setSaveStatus('saved');
       setErrorMessage(null);
+
+      // Asynchronously generate and persist vector embedding for semantic memory search (Ask My Life)
+      if (userId && updated.id && !updated.isSample) {
+        setTimeout(async () => {
+          try {
+            const embedRes = await generateEntryEmbedding(updated);
+            if (embedRes && Array.isArray(embedRes.embedding) && embedRes.embedding.length > 0) {
+              await saveJournalEntry(userId, {
+                ...updated,
+                embedding: embedRes.embedding,
+                embeddingUpdatedAt: Date.now(),
+                embeddingModel: embedRes.modelUsed || 'gemini-embedding-001',
+              });
+            }
+          } catch (e) {
+            // Background embedding is non-blocking
+          }
+        }, 1200);
+      }
     } catch (err: any) {
       console.error('Firestore save failed:', err);
       setSaveStatus('error');
@@ -626,10 +680,15 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     setIsEditingTitle(false);
     const newTitle = titleValue.trim() || t.untitledReflection;
     if (newTitle !== entry.title) {
-      const updated = { 
+      const updated: JournalEntry = { 
         ...entry, 
         title: newTitle,
-        editedAt: Date.now()
+        metadata: {
+          ...entry.metadata,
+          hasCustomTitle: true,
+        },
+        editedAt: Date.now(),
+        updatedAt: Date.now(),
       };
       await persistEntry(updated);
     }
@@ -798,6 +857,82 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     } catch {}
   };
 
+  // Image Attachment Handlers
+  const handleTriggerImageSelect = () => {
+    setImageError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset file input so selecting the same file again triggers change event
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      setImageError(validation.error || 'Invalid photo format or file size.');
+      return;
+    }
+
+    try {
+      setIsUploadingImage(true);
+      setUploadProgressMsg('Optimizing photo...');
+      setImageError(null);
+
+      // Clean up previous image file from Storage if replacing
+      const oldPath = entry.attachedImage?.storagePath || entry.metadata?.attachedImage?.storagePath;
+      if (oldPath && oldPath !== 'inline') {
+        deleteEntryImage(oldPath).catch((err) => console.warn('Could not delete prior image:', err));
+      }
+
+      const activeUserId = userId || 'user_local';
+      const uploaded = await uploadEntryImage(activeUserId, entry.id, file, (status) => {
+        setUploadProgressMsg(status);
+      });
+
+      const updated: JournalEntry = {
+        ...entry,
+        attachedImage: uploaded,
+        metadata: {
+          ...entry.metadata,
+          attachedImage: uploaded,
+        },
+        editedAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      await persistEntry(updated);
+    } catch (err: any) {
+      console.error('Failed to attach photo:', err);
+      setImageError(err.message || 'Could not process photo. Please check your file and try again.');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleRemoveAttachedImage = async () => {
+    const pathToDelete = entry.attachedImage?.storagePath || entry.metadata?.attachedImage?.storagePath;
+    if (pathToDelete) {
+      deleteEntryImage(pathToDelete).catch((err) => console.warn('Could not delete image from storage:', err));
+    }
+
+    const updated: JournalEntry = {
+      ...entry,
+      attachedImage: null,
+      metadata: {
+        ...entry.metadata,
+        attachedImage: null,
+      },
+      editedAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    await persistEntry(updated);
+  };
+
   // Message Editing Handlers
   const handleStartEditMessage = (msg: JournalMessage) => {
     setEditingMessageId(msg.id);
@@ -848,6 +983,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         updatedAt: now,
       };
 
+      const isCustomTitle = Boolean(updatedEntry.metadata?.hasCustomTitle);
+
       setEditingMessageId(null);
       setEditMessageText('');
       await persistEntry(updatedEntry);
@@ -862,7 +999,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             mode: updatedMessage.mode || selectedMode,
             language,
             userName,
-            entryTitle: updatedEntry.title,
+            hasCustomTitle: isCustomTitle,
+            entryTitle: isCustomTitle ? updatedEntry.title : '',
             metadata: updatedEntry.metadata,
           }),
         });
@@ -886,16 +1024,26 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           modelUsed: data.modelUsed,
         };
 
+        const resolvedTitle = (!isCustomTitle && data.suggestedTitle && typeof data.suggestedTitle === 'string' && data.suggestedTitle.trim())
+          ? data.suggestedTitle.trim()
+          : updatedEntry.title;
+
         const finalUpdated: JournalEntry = {
           ...updatedEntry,
+          title: resolvedTitle,
           messages: [...truncatedMessages, assistantMessage],
           summary: data.suggestedSummary || updatedEntry.summary,
           metadata: {
             ...updatedEntry.metadata,
+            hasCustomTitle: isCustomTitle,
             mood: data.detectedMood || updatedEntry.metadata?.mood,
             tags: Array.from(new Set([...(updatedEntry.metadata?.tags || []), ...(data.tags || [])])),
           },
         };
+
+        if (!isCustomTitle && resolvedTitle !== updatedEntry.title) {
+          setTitleValue(resolvedTitle);
+        }
 
         await persistEntry(finalUpdated);
       } catch (err: any) {
@@ -909,7 +1057,9 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
 
   const handleSendMessage = async (customPrompt?: string) => {
     const textToSend = customPrompt || inputText;
-    if (!textToSend.trim() || isGenerating) return;
+    if (!textToSend.trim() || isGenerating || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
 
     // Clear local draft when sending
     try {
@@ -927,12 +1077,14 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     };
 
     const newMessages = [...entry.messages, userMessage];
+    const isFirstMessage = entry.messages.length === 0;
+    const isCustomTitle = Boolean(entry.metadata?.hasCustomTitle);
 
-    // Optimistically update entry title if it's the very first message
+    // Optimistically update entry title if it's the very first message and user hasn't set a manual title
     let newTitle = entry.title;
-    if (entry.messages.length === 0 && entry.title === 'New Reflection' && textToSend.length > 0) {
-      const firstLine = textToSend.split('\n')[0].trim();
-      newTitle = firstLine.length > 120 ? firstLine.slice(0, 120).trim() : firstLine;
+    if (isFirstMessage && !isCustomTitle && (entry.title === 'New Reflection' || entry.title === t.newReflection || !entry.title)) {
+      const cleanFirstLine = textToSend.replace(/^#+\s+/gm, '').replace(/^[-*+]\s+/gm, '').replace(/^\d+\.\s+/gm, '').trim().split('\n')[0].trim();
+      newTitle = cleanFirstLine.length > 50 ? cleanFirstLine.slice(0, 48).trim() + '...' : cleanFirstLine || entry.title;
     }
 
     const optimisticEntry: JournalEntry = {
@@ -955,7 +1107,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           mode: selectedMode,
           language,
           userName,
-          entryTitle: optimisticEntry.title,
+          hasCustomTitle: isCustomTitle,
+          entryTitle: isCustomTitle ? optimisticEntry.title : '',
           metadata: optimisticEntry.metadata,
         }),
       });
@@ -979,16 +1132,27 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         modelUsed: data.modelUsed,
       };
 
+      // If user hasn't manually set a custom title, adopt the AI generated title
+      const resolvedTitle = (!isCustomTitle && data.suggestedTitle && typeof data.suggestedTitle === 'string' && data.suggestedTitle.trim())
+        ? data.suggestedTitle.trim()
+        : optimisticEntry.title;
+
       const finalUpdated: JournalEntry = {
         ...optimisticEntry,
+        title: resolvedTitle,
         messages: [...newMessages, assistantMessage],
         summary: data.suggestedSummary || optimisticEntry.summary,
         metadata: {
           ...optimisticEntry.metadata,
+          hasCustomTitle: isCustomTitle,
           mood: data.detectedMood || optimisticEntry.metadata?.mood,
           tags: Array.from(new Set([...(optimisticEntry.metadata?.tags || []), ...(data.tags || [])])),
         },
       };
+
+      if (!isCustomTitle && resolvedTitle !== optimisticEntry.title) {
+        setTitleValue(resolvedTitle);
+      }
 
       await persistEntry(finalUpdated);
     } catch (err: any) {
@@ -996,6 +1160,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       setErrorMessage(err.message || 'Error communicating with Gemini.');
     } finally {
       setIsGenerating(false);
+      setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -1221,23 +1387,27 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Sample Reflection Badge */}
+            {(entry.isSample || entry.metadata?.isSample) && (
+              <span 
+                id="badge-editor-sample-entry"
+                title="Introductory sample reflection"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 dark:bg-purple-400/15 text-purple-700 dark:text-purple-300 border border-purple-500/20 shrink-0"
+              >
+                <Sparkles className="w-2.5 h-2.5 text-purple-500 shrink-0" />
+                <span>{t.sample || 'Sample'}</span>
+              </span>
+            )}
           </div>
 
           {/* Top Toolbar Actions: Save status, Insights & Options Dropdown */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            {/* Edited badge if modified */}
-            {entry.editedAt && (
-              <div 
-                title={`Modified on ${new Date(entry.editedAt).toLocaleDateString()} at ${new Date(entry.editedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-                className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] theme-bg-subtle theme-text-secondary border theme-border font-medium shadow-2xs"
-              >
-                <Pencil className="w-2.5 h-2.5 opacity-70 theme-accent-text" />
-                <span>{t.edited}</span>
-              </div>
-            )}
-
             {/* Persistence state badge */}
-            <div className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-xs theme-bg-subtle border theme-border shadow-xs">
+            <div 
+              title={saveStatus === 'saving' ? t.saveStatusSaving : saveStatus === 'error' ? t.saveStatusError : "Securely saved to vault"}
+              className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-xs theme-bg-subtle border theme-border shadow-xs"
+            >
               {saveStatus === 'saving' ? (
                 <>
                   <Loader2 className="w-3 h-3 theme-accent-text animate-spin shrink-0" />
@@ -1255,10 +1425,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   </button>
                 </>
               ) : (
-                <>
-                  <ShieldCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <span className="theme-text-secondary font-medium text-[10px] sm:text-[11px] hidden sm:inline">{t.saveStatusSaved}</span>
-                </>
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               )}
             </div>
 
@@ -1318,24 +1485,6 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                       <div className="text-[10px] theme-text-secondary">PDF, Markdown, Text, JSON</div>
                     </div>
                   </button>
-
-                  {/* Mood Trends */}
-                  {onOpenMoodTrends && (
-                    <button
-                      id="btn-opt-mood-trends"
-                      onClick={() => {
-                        onOpenMoodTrends();
-                        setIsOptionsOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs text-left theme-text-primary hover:theme-bg-subtle transition-colors"
-                    >
-                      <TrendingUp className="w-4 h-4 text-[#1A73E8] dark:text-[#E8A33D] shrink-0" />
-                      <div>
-                        <div className="font-semibold">{t.moodTrends}</div>
-                        <div className="text-[10px] theme-text-secondary">Timeline & frequency patterns</div>
-                      </div>
-                    </button>
-                  )}
 
                   {/* Focus Mode */}
                   {onToggleFocusMode && (
@@ -1574,6 +1723,73 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               </button>
             )}
           </div>
+
+          {/* Photo Attachment (Firebase Cloud Storage - Opt-in) */}
+          <div id="container-photo-bar" className="flex items-center gap-1.5 shrink-0 pl-1">
+            <input 
+              type="file"
+              ref={fileInputRef}
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleImageFileChange}
+              className="hidden"
+              id="file-input-photo-attachment"
+            />
+
+            {(entry.attachedImage?.url || entry.metadata?.attachedImage?.url) ? (
+              <div 
+                id="chip-attached-photo"
+                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/30 text-xs font-medium shadow-2xs group"
+              >
+                <button
+                  onClick={() => setShowImageZoomModal(true)}
+                  className="flex items-center gap-1.5 hover:underline max-w-[130px] sm:max-w-[170px] truncate"
+                  title="View attached photo full-size"
+                  id="btn-view-attached-photo"
+                >
+                  <img 
+                    src={entry.attachedImage?.url || entry.metadata?.attachedImage?.url} 
+                    alt="Photo preview" 
+                    referrerPolicy="no-referrer"
+                    className="w-4 h-4 rounded-full object-cover border border-violet-500/40 shrink-0" 
+                  />
+                  <span className="truncate">Photo</span>
+                </button>
+                <button
+                  id="btn-replace-attached-photo"
+                  onClick={handleTriggerImageSelect}
+                  disabled={isUploadingImage}
+                  title="Replace with another photo"
+                  className="hover:text-violet-900 dark:hover:text-violet-100 transition-colors p-0.5 rounded-full hover:bg-violet-500/20 shrink-0 text-[10px] uppercase font-bold"
+                >
+                  {isUploadingImage ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Swap'}
+                </button>
+                <button
+                  id="btn-remove-attached-photo"
+                  onClick={handleRemoveAttachedImage}
+                  className="hover:text-rose-500 transition-colors p-0.5 rounded-full hover:bg-rose-500/10 shrink-0 ml-0.5"
+                  title="Remove photo from this reflection"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                id="btn-attach-photo"
+                onClick={handleTriggerImageSelect}
+                disabled={isUploadingImage}
+                title="Attach a photo to this reflection (JPEG, PNG, WebP up to 10MB). Stored privately in your personal vault."
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium theme-text-secondary hover:text-violet-600 dark:hover:text-violet-400 hover:theme-bg-subtle border border-transparent hover:theme-border transition-colors whitespace-nowrap"
+              >
+                {isUploadingImage ? (
+                  <Loader2 className="w-3.5 h-3.5 text-violet-500 animate-spin" />
+                ) : (
+                  <Camera className="w-3.5 h-3.5 text-violet-600/70 dark:text-violet-400/70" />
+                )}
+                <span className="hidden xs:inline">{isUploadingImage ? uploadProgressMsg : 'Attach Photo'}</span>
+                <span className="xs:hidden">{isUploadingImage ? '...' : 'Photo'}</span>
+              </button>
+            )}
+          </div>
         </div>
 
           {/* Modular Tags */}
@@ -1663,14 +1879,34 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
 
       {/* Error Banner if any */}
       {errorMessage && (
-        <div className="px-3 py-2 bg-rose-50 dark:bg-rose-950/70 border-b border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-200 text-xs flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
-            <span>{errorMessage}</span>
+        <div className="px-3 py-2 bg-rose-50 dark:bg-rose-950/70 border-b border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-200 text-xs flex items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-2 flex-1 min-w-0">
+            <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5 sm:mt-0" />
+            <div className="prose-inline text-xs font-normal leading-snug [&_p]:inline [&_strong]:font-bold [&_strong]:text-rose-900 dark:[&_strong]:text-rose-100 [&_em]:italic">
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{errorMessage}</ReactMarkdown>
+            </div>
           </div>
           <button
             onClick={() => setErrorMessage(null)}
-            className="text-rose-500 hover:text-rose-700 p-1"
+            className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-300 p-1 shrink-0 rounded-md hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Image Upload Error Banner if any */}
+      {imageError && (
+        <div className="px-3 py-2 bg-amber-50 dark:bg-amber-950/70 border-b border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-200 text-xs flex items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-2 flex-1 min-w-0">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+            <div className="prose-inline text-xs font-normal leading-snug [&_p]:inline [&_strong]:font-bold [&_strong]:text-amber-950 dark:[&_strong]:text-amber-100 [&_em]:italic">
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{imageError}</ReactMarkdown>
+            </div>
+          </div>
+          <button
+            onClick={() => setImageError(null)}
+            className="text-amber-600 hover:text-amber-800 dark:hover:text-amber-300 p-1 shrink-0 rounded-md hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -1679,6 +1915,98 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
 
       {/* Messages Stream Container (Reading Canvas) */}
       <div className="flex-1 min-h-0 overflow-y-auto p-2.5 sm:p-6 space-y-2.5 sm:space-y-4">
+        {/* Uploading Photo Indicator */}
+        {isUploadingImage && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-2xl mx-auto p-4 rounded-2xl border border-violet-500/30 bg-violet-50/50 dark:bg-violet-950/30 flex items-center gap-3"
+          >
+            <div className="w-10 h-10 rounded-xl bg-violet-500/20 text-violet-600 dark:text-violet-300 flex items-center justify-center shrink-0">
+              <Loader2 className="w-5 h-5 animate-spin" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-violet-800 dark:text-violet-200">
+                {uploadProgressMsg}
+              </div>
+              <div className="text-[11px] text-violet-600/80 dark:text-violet-400">
+                Encrypting and storing in owner-isolated Google Cloud Storage.
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Attached Photo Display Card in Canvas */}
+        {(entry.attachedImage?.url || entry.metadata?.attachedImage?.url) && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.2 }}
+            className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden border theme-border theme-bg-surface shadow-xs group/photo"
+          >
+            <div 
+              className="relative aspect-[16/9] sm:aspect-[21/9] max-h-72 w-full bg-black/5 dark:bg-white/5 overflow-hidden cursor-pointer" 
+              onClick={() => setShowImageZoomModal(true)}
+            >
+              <img
+                src={entry.attachedImage?.url || entry.metadata?.attachedImage?.url}
+                alt={entry.attachedImage?.fileName || 'Attached reflection photo'}
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover group-hover/photo:scale-102 transition-transform duration-300"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-end justify-between p-3">
+                <div className="text-white text-xs flex items-center gap-1.5 font-medium drop-shadow-sm">
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Click to view full photo</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTriggerImageSelect();
+                    }}
+                    title="Replace Photo"
+                    className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white backdrop-blur-xs transition-colors text-xs flex items-center gap-1"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span className="text-[11px] hidden sm:inline">Swap</span>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveAttachedImage();
+                    }}
+                    title="Remove Photo"
+                    className="p-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white backdrop-blur-xs transition-colors text-xs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="px-3.5 py-2 border-t theme-border flex items-center justify-between text-[11px] theme-text-secondary bg-black/2 dark:bg-white/2">
+              <div className="flex items-center gap-2 truncate">
+                <span className="font-semibold theme-text-primary flex items-center gap-1">
+                  <Camera className="w-3 h-3 text-violet-500" />
+                  <span className="truncate">{entry.attachedImage?.fileName || 'Attached Photo'}</span>
+                </span>
+                {entry.attachedImage?.fileSizeBytes && (
+                  <span className="opacity-75">
+                    ({(entry.attachedImage.fileSizeBytes / (1024 * 1024)).toFixed(2)} MB)
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowImageZoomModal(true)}
+                className="theme-accent-text hover:underline font-semibold shrink-0 text-[11px] flex items-center gap-1"
+              >
+                <Maximize2 className="w-3 h-3" />
+                <span>Expand</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {entry.messages.length === 0 ? (
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
@@ -1713,7 +2041,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                     transition={{ duration: 0.2, delay: idx * 0.04 }}
                     whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => handleSendMessage(suggestion)}
+                    onClick={() => !isSubmitting && !isGenerating && handleSendMessage(suggestion)}
                     className="p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl theme-bg-subtle border theme-border hover:border-[#1A73E8]/50 dark:hover:border-[#E8A33D]/50 text-xs theme-text-primary transition-colors text-left flex flex-col justify-between group shadow-xs hover:shadow-sm"
                   >
                     <span className="leading-relaxed font-medium text-[11.5px] sm:text-[12px]">{suggestion}</span>
@@ -1728,7 +2056,75 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             </div>
           </motion.div>
         ) : (
-          <AnimatePresence initial={false}>
+          <div className="space-y-2.5 sm:space-y-4">
+            {/* Sample Entry Feature Exploration Companion Card */}
+            {(entry.isSample || entry.metadata?.isSample) && !isSampleCardDismissed && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                transition={{ duration: 0.25 }}
+                className="w-full max-w-3xl mx-auto p-3.5 sm:p-4 rounded-2xl theme-bg-surface border theme-border border-l-4 border-l-[#1A73E8] dark:border-l-[#E8A33D] shadow-xs relative"
+              >
+                <div className="flex items-start justify-between gap-3 mb-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="p-1.5 rounded-xl bg-purple-500/10 dark:bg-purple-400/15 text-purple-600 dark:text-purple-300 shrink-0">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold theme-text-primary tracking-tight">
+                        {t.whatYouCanDo}
+                      </h4>
+                      <p className="text-[11px] theme-text-secondary leading-snug">
+                        {t.sampleEntryTip}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    id="btn-dismiss-sample-guide"
+                    onClick={handleDismissSampleCard}
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:theme-bg-subtle transition-colors shrink-0"
+                    title={t.dismiss}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Compact, skimmable feature grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t theme-border mt-2">
+                  <div className="p-2 rounded-xl theme-bg-subtle border theme-border flex flex-col gap-0.5">
+                    <span className="text-[11px] font-semibold theme-text-primary flex items-center gap-1">
+                      <span>💡</span>
+                      <span>4 AI Modes</span>
+                    </span>
+                    <span className="text-[10px] theme-text-secondary leading-tight">Reflect, Summarize, Brainstorm, Actions</span>
+                  </div>
+                  <div className="p-2 rounded-xl theme-bg-subtle border theme-border flex flex-col gap-0.5">
+                    <span className="text-[11px] font-semibold theme-text-primary flex items-center gap-1">
+                      <span>🏷️</span>
+                      <span>Moods & Tags</span>
+                    </span>
+                    <span className="text-[10px] theme-text-secondary leading-tight">Track emotional trends & organize notes</span>
+                  </div>
+                  <div className="p-2 rounded-xl theme-bg-subtle border theme-border flex flex-col gap-0.5">
+                    <span className="text-[11px] font-semibold theme-text-primary flex items-center gap-1">
+                      <span>🎙️</span>
+                      <span>Voice Studio</span>
+                    </span>
+                    <span className="text-[10px] theme-text-secondary leading-tight">Natural voice dictation & Read Aloud</span>
+                  </div>
+                  <div className="p-2 rounded-xl theme-bg-subtle border theme-border flex flex-col gap-0.5">
+                    <span className="text-[11px] font-semibold theme-text-primary flex items-center gap-1">
+                      <span>🎨</span>
+                      <span>Themes & Lock</span>
+                    </span>
+                    <span className="text-[10px] theme-text-secondary leading-tight">5 palettes, 5 languages & 4-digit PIN</span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            <AnimatePresence initial={false}>
             {entry.messages.map((msg) => {
               const isUser = msg.role === 'user';
               const isCopied = copiedMessageId === msg.id;
@@ -1910,7 +2306,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               );
             })}
           </AnimatePresence>
-        )}
+        </div>
+      )}
 
         {/* Subtle, Tasteful Prompting for Short Conversations */}
         {entry.messages.length > 0 && entry.messages.length <= 2 && !isGenerating && (
@@ -2039,14 +2436,16 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
 
           {/* Voice Input Toast / Banner */}
           {voiceToast && (
-            <div className="p-2 sm:p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between shadow-xs">
-              <span className="flex items-center gap-1.5 font-medium text-[11px] sm:text-xs">
+            <div className="p-2 sm:p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between shadow-xs gap-2">
+              <div className="flex items-center gap-1.5 font-medium text-[11px] sm:text-xs min-w-0">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                {voiceToast}
-              </span>
+                <div className="prose-inline [&_p]:inline [&_strong]:font-bold [&_em]:italic">
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{voiceToast}</ReactMarkdown>
+                </div>
+              </div>
               <button
                 onClick={() => setVoiceToast(null)}
-                className="p-1 hover:bg-amber-500/20 rounded-md text-xs font-semibold"
+                className="p-1 hover:bg-amber-500/20 rounded-md text-xs font-semibold shrink-0"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -2127,11 +2526,11 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             <button
               id="btn-send-reflection"
               onClick={() => handleSendMessage()}
-              disabled={!inputText.trim() || isGenerating || isTranscribing}
+              disabled={!inputText.trim() || isGenerating || isTranscribing || isSubmitting}
               className="p-1.5 sm:p-2.5 rounded-full bg-[#1A73E8] hover:bg-[#1557B0] dark:bg-[#E8A33D] dark:hover:bg-[#D9932E] text-white dark:text-[#171310] font-bold transition-all disabled:opacity-40 shadow-sm shrink-0 active:scale-95"
               title={t.send}
             >
-              {isGenerating ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> : <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />}
+              {isGenerating || isSubmitting ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> : <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />}
             </button>
           </div>
 
@@ -2151,7 +2550,6 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         onClose={() => setShowInsightsModal(false)}
         title={entry.title}
         data={insightsData}
-        onOpenMoodTrends={onOpenMoodTrends}
       />
 
       {/* Export Modal for Current Entry */}
@@ -2178,6 +2576,67 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         currentLocation={entry.metadata?.placeLocation}
         onSelectLocation={handleSelectLocation}
       />
+
+      {/* Photo Lightbox / Zoom Modal */}
+      <AnimatePresence>
+        {showImageZoomModal && (entry.attachedImage?.url || entry.metadata?.attachedImage?.url) && (
+          <div 
+            id="modal-photo-lightbox"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-200"
+            onClick={() => setShowImageZoomModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-4xl w-full max-h-[90vh] flex flex-col rounded-2xl overflow-hidden bg-slate-900 border border-slate-700 shadow-2xl"
+            >
+              <div className="px-4 py-3 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-white shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Camera className="w-4 h-4 text-violet-400 shrink-0" />
+                  <span className="text-xs sm:text-sm font-semibold truncate">
+                    {entry.attachedImage?.fileName || 'Attached Reflection Photo'}
+                  </span>
+                  {entry.attachedImage?.fileSizeBytes && (
+                    <span className="text-xs text-slate-400 hidden sm:inline">
+                      ({(entry.attachedImage.fileSizeBytes / (1024 * 1024)).toFixed(2)} MB)
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={entry.attachedImage?.url || entry.metadata?.attachedImage?.url}
+                    download={entry.attachedImage?.fileName || 'reflection_photo.jpg'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+                    title="Open full size in new tab / Download"
+                  >
+                    <Download className="w-4 h-4" />
+                  </a>
+                  <button
+                    onClick={() => setShowImageZoomModal(false)}
+                    className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+                    title="Close preview"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-2 sm:p-4 bg-black/60">
+                <img
+                  src={entry.attachedImage?.url || entry.metadata?.attachedImage?.url}
+                  alt="Attached photo full size"
+                  referrerPolicy="no-referrer"
+                  className="max-w-full max-h-[75vh] object-contain rounded-lg shadow-xl"
+                />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

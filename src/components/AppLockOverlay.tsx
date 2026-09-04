@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Lock, Delete, AlertCircle, RefreshCw, Feather } from 'lucide-react';
+import { Lock, Delete, AlertCircle, RefreshCw, Feather, Keyboard } from 'lucide-react';
 import { verifyPin } from '../lib/lockService';
 import { signInWithGoogle } from '../lib/firebase';
 import { usePreferences } from '../context/PreferencesContext';
@@ -16,28 +16,17 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({ isLocked, onUnlo
   const [error, setError] = useState(false);
   const [isReauthing, setIsReauthing] = useState(false);
   const [reauthNotice, setReauthNotice] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Handle number click
-  const handleDigit = (digit: string) => {
-    if (enteredPin.length < 4) {
-      const nextPin = enteredPin + digit;
-      setEnteredPin(nextPin);
-      setError(false);
-      if (nextPin.length === 4) {
-        validatePin(nextPin);
-      }
+  // Focus input automatically whenever locked
+  useEffect(() => {
+    if (isLocked) {
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  };
-
-  const handleBackspace = () => {
-    setEnteredPin((prev) => prev.slice(0, -1));
-    setError(false);
-  };
-
-  const handleClear = () => {
-    setEnteredPin('');
-    setError(false);
-  };
+  }, [isLocked]);
 
   const validatePin = async (pinToTest: string) => {
     if (!lockSettings.pinHash) {
@@ -54,7 +43,44 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({ isLocked, onUnlo
       setError(true);
       setTimeout(() => {
         setEnteredPin('');
+        inputRef.current?.focus();
       }, 500);
+    }
+  };
+
+  // Handle number input (both on-screen pad & keyboard)
+  const handleDigit = useCallback(
+    (digit: string) => {
+      setEnteredPin((prev) => {
+        if (prev.length >= 4) return prev;
+        const nextPin = prev + digit;
+        setError(false);
+        if (nextPin.length === 4) {
+          validatePin(nextPin);
+        }
+        return nextPin;
+      });
+    },
+    [lockSettings.pinHash]
+  );
+
+  const handleBackspace = useCallback(() => {
+    setEnteredPin((prev) => prev.slice(0, -1));
+    setError(false);
+  }, []);
+
+  const handleClear = useCallback(() => {
+    setEnteredPin('');
+    setError(false);
+  }, []);
+
+  // Handle hidden input changes (for mobile soft-keyboard, autofill, or physical keyboard typing)
+  const handleHiddenInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value.replace(/\D/g, '').slice(0, 4);
+    setEnteredPin(rawVal);
+    setError(false);
+    if (rawVal.length === 4) {
+      validatePin(rawVal);
     }
   };
 
@@ -76,19 +102,24 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({ isLocked, onUnlo
     }
   };
 
-  // Physical keyboard listener
+  // Physical keyboard & Numpad listener
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!isLocked) return;
-      if (/^[0-9]$/.test(e.key)) {
+
+      // Handle numbers 0-9 from top row and numpad
+      if (/^[0-9]$/.test(e.key) || (e.code && e.code.startsWith('Numpad') && /^[0-9]$/.test(e.key))) {
+        e.preventDefault();
         handleDigit(e.key);
-      } else if (e.key === 'Backspace') {
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
         handleBackspace();
       } else if (e.key === 'Escape') {
+        e.preventDefault();
         handleClear();
       }
     },
-    [isLocked, enteredPin, lockSettings.pinHash]
+    [isLocked, handleDigit, handleBackspace, handleClear]
   );
 
   useEffect(() => {
@@ -106,8 +137,24 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({ isLocked, onUnlo
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 theme-bg-app flex flex-col items-center justify-center p-4 selection:bg-transparent"
+        onClick={() => inputRef.current?.focus()}
+        className="fixed inset-0 z-50 theme-bg-app flex flex-col items-center justify-center p-4 selection:bg-transparent cursor-default"
       >
+        {/* Hidden Input for Keyboard & Autofill Support */}
+        <input
+          ref={inputRef}
+          id="input-pin-keyboard"
+          type="password"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={4}
+          value={enteredPin}
+          onChange={handleHiddenInputChange}
+          autoFocus
+          aria-label="Enter 4-digit PIN"
+          className="absolute opacity-0 pointer-events-none w-0 h-0"
+        />
+
         <div className="w-full max-w-sm flex flex-col items-center text-center">
           {/* Brand & Lock Badge */}
           <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-[#1A73E8] via-[#7B1FA2] to-[#E91E63] flex items-center justify-center text-white shadow-xl shadow-blue-500/20 mb-5">
@@ -125,7 +172,9 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({ isLocked, onUnlo
           <motion.div
             animate={error ? { x: [-12, 12, -8, 8, -4, 4, 0] } : {}}
             transition={{ duration: 0.4 }}
-            className="flex items-center justify-center gap-4 my-7"
+            className="flex items-center justify-center gap-4 my-6 cursor-pointer"
+            onClick={() => inputRef.current?.focus()}
+            title="Click or use keyboard to type PIN"
           >
             {[0, 1, 2, 3].map((index) => {
               const filled = enteredPin.length > index;
@@ -143,6 +192,12 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({ isLocked, onUnlo
               );
             })}
           </motion.div>
+
+          {/* Keyboard typing hint badge */}
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full theme-bg-subtle text-[11px] theme-text-secondary mb-4 border theme-border shadow-2xs">
+            <Keyboard className="w-3.5 h-3.5" />
+            <span>Type numbers on your keyboard or use keypad</span>
+          </div>
 
           {/* Error / Notice Text */}
           {error && (
@@ -166,8 +221,12 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({ isLocked, onUnlo
                 key={num}
                 id={`pin-btn-${num}`}
                 type="button"
-                onClick={() => handleDigit(num.toString())}
-                className="w-18 h-18 rounded-3xl theme-bg-surface hover:theme-bg-hover border theme-border font-gemini-display font-semibold text-xl theme-text-primary flex items-center justify-center transition-all active:scale-90 shadow-xs hover:border-[#1A73E8]/40 dark:hover:border-[#E8A33D]/40"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDigit(num.toString());
+                  inputRef.current?.focus();
+                }}
+                className="w-18 h-18 rounded-3xl theme-bg-surface hover:theme-bg-hover border theme-border font-gemini-display font-semibold text-xl theme-text-primary flex items-center justify-center transition-all active:scale-90 shadow-xs hover:border-[#1A73E8]/40 dark:hover:border-[#E8A33D]/40 cursor-pointer"
               >
                 {num}
               </button>
@@ -177,8 +236,12 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({ isLocked, onUnlo
             <button
               type="button"
               id="pin-btn-clear"
-              onClick={handleClear}
-              className="w-18 h-18 rounded-3xl theme-bg-subtle hover:theme-bg-hover border theme-border theme-text-secondary text-xs font-medium flex items-center justify-center transition-all active:scale-90"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClear();
+                inputRef.current?.focus();
+              }}
+              className="w-18 h-18 rounded-3xl theme-bg-subtle hover:theme-bg-hover border theme-border theme-text-secondary text-xs font-medium flex items-center justify-center transition-all active:scale-90 cursor-pointer"
             >
               Clear
             </button>
@@ -186,8 +249,12 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({ isLocked, onUnlo
             <button
               id="pin-btn-0"
               type="button"
-              onClick={() => handleDigit('0')}
-              className="w-18 h-18 rounded-3xl theme-bg-surface hover:theme-bg-hover border theme-border font-gemini-display font-semibold text-xl theme-text-primary flex items-center justify-center transition-all active:scale-90 shadow-xs hover:border-[#1A73E8]/40 dark:hover:border-[#E8A33D]/40"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDigit('0');
+                inputRef.current?.focus();
+              }}
+              className="w-18 h-18 rounded-3xl theme-bg-surface hover:theme-bg-hover border theme-border font-gemini-display font-semibold text-xl theme-text-primary flex items-center justify-center transition-all active:scale-90 shadow-xs hover:border-[#1A73E8]/40 dark:hover:border-[#E8A33D]/40 cursor-pointer"
             >
               0
             </button>
@@ -195,8 +262,12 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({ isLocked, onUnlo
             <button
               id="pin-btn-backspace"
               type="button"
-              onClick={handleBackspace}
-              className="w-18 h-18 rounded-3xl theme-bg-subtle hover:theme-bg-hover border theme-border theme-text-secondary hover:theme-text-primary flex items-center justify-center transition-all active:scale-90 shadow-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleBackspace();
+                inputRef.current?.focus();
+              }}
+              className="w-18 h-18 rounded-3xl theme-bg-subtle hover:theme-bg-hover border theme-border theme-text-secondary hover:theme-text-primary flex items-center justify-center transition-all active:scale-90 shadow-xs cursor-pointer"
               title="Backspace"
             >
               <Delete className="w-5 h-5" />
@@ -207,9 +278,12 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({ isLocked, onUnlo
           <button
             id="btn-forgot-pin"
             type="button"
-            onClick={handleForgotPin}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleForgotPin();
+            }}
             disabled={isReauthing}
-            className="text-xs font-medium theme-accent-text hover:underline flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            className="text-xs font-medium theme-accent-text hover:underline flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
           >
             {isReauthing ? (
               <>

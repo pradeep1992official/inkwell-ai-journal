@@ -3,6 +3,8 @@ import {
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
+  signInAnonymously,
+  linkWithPopup,
   signOut as fbSignOut, 
   onAuthStateChanged,
   setPersistence,
@@ -14,6 +16,10 @@ import {
   getFirestore, 
   Firestore 
 } from 'firebase/firestore';
+import { 
+  getStorage, 
+  FirebaseStorage 
+} from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -45,6 +51,8 @@ const rawConfig = firebaseConfig as Record<string, any>;
 export const db: Firestore = rawConfig.firestoreDatabaseId && rawConfig.firestoreDatabaseId !== '(default)'
   ? getFirestore(app, rawConfig.firestoreDatabaseId)
   : getFirestore(app);
+
+export const storage: FirebaseStorage = getStorage(app);
 
 export async function waitForAuthReady(): Promise<User | null> {
   if (typeof (auth as any).authStateReady === 'function') {
@@ -84,6 +92,72 @@ export async function signInWithGoogle(): Promise<User> {
     throw error;
   } finally {
     isSigningIn = false;
+  }
+}
+
+/**
+ * Sign in as an Anonymous Guest using Firebase Anonymous Authentication.
+ * Gives the user a unique request.auth.uid for isolated Firestore access without a Google account.
+ */
+let isGuestSigningIn = false;
+export async function signInAsGuest(): Promise<User> {
+  if (isGuestSigningIn) {
+    throw new Error('A guest session is already starting.');
+  }
+  isGuestSigningIn = true;
+  try {
+    if (typeof window !== 'undefined') {
+      await setPersistence(auth, browserLocalPersistence).catch(() => {});
+    }
+    const result = await signInAnonymously(auth);
+    return result.user;
+  } catch (error: any) {
+    if (error?.code === 'auth/admin-restricted-operation') {
+      const helpfulError = new Error('Anonymous sign-in is disabled in this Firebase project. Please use "Sign in with Google" or enable Anonymous sign-in in your Firebase Console (Authentication > Sign-in method).');
+      (helpfulError as any).code = 'auth/admin-restricted-operation';
+      throw helpfulError;
+    }
+    console.error('Anonymous Guest Sign-in error:', error);
+    throw error;
+  } finally {
+    isGuestSigningIn = false;
+  }
+}
+
+/**
+ * Links an active anonymous guest account with a Google account.
+ * Keeps all existing journal entries, settings, and UID intact while attaching a permanent Google identity.
+ */
+let isLinkingAccount = false;
+export async function linkGuestWithGoogle(): Promise<{ user: User; accessToken: string | null }> {
+  if (!auth.currentUser) {
+    throw new Error('No active guest session found to link.');
+  }
+  if (!auth.currentUser.isAnonymous) {
+    throw new Error('This account is already linked to a permanent provider.');
+  }
+  if (isLinkingAccount) {
+    throw new Error('An account linking window is already open.');
+  }
+  isLinkingAccount = true;
+  try {
+    const result = await linkWithPopup(auth.currentUser, googleProvider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const accessToken = credential?.accessToken || null;
+    if (accessToken && typeof window !== 'undefined') {
+      sessionStorage.setItem('inkwell_gcal_token', accessToken);
+      if (result.user?.email) {
+        sessionStorage.setItem('inkwell_gcal_email', result.user.email);
+      }
+    }
+    return { user: result.user, accessToken };
+  } catch (error: any) {
+    if (error?.code !== 'auth/popup-closed-by-user' && error?.code !== 'auth/cancelled-popup-request') {
+      console.warn('Account linking error:', error);
+    }
+    throw error;
+  } finally {
+    isLinkingAccount = false;
   }
 }
 

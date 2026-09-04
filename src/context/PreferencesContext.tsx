@@ -4,6 +4,7 @@ import { AppTheme, AppFontSize, AppLanguage, ThemeMode, LockSettings, UserPrefer
 import { translations, TranslationDictionary } from '../i18n/translations';
 import { getUserPreferences, saveUserPreferences } from '../lib/firestoreService';
 import { subscribeToAuthState } from '../lib/firebase';
+import { checkAndSeedSampleEntry } from '../lib/sampleEntryService';
 
 interface PreferencesContextType {
   theme: AppTheme;
@@ -521,10 +522,15 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
       newFontSize: AppFontSize,
       newLang: AppLanguage,
       newLock: LockSettings,
-      user: User | null
+      user: User | null,
+      newWeatherEnabled?: boolean,
+      newTourCompleted?: boolean
     ) => {
       const activeUser = user || currentUserRef.current;
       if (!activeUser) return;
+
+      const targetWeather = typeof newWeatherEnabled === 'boolean' ? newWeatherEnabled : prefsRef.current.weatherEnabled;
+      const targetTour = typeof newTourCompleted === 'boolean' ? newTourCompleted : prefsRef.current.hasCompletedTour;
 
       const prefPayload: UserPreferences = {
         theme: newTheme,
@@ -532,8 +538,8 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
         fontSize: newFontSize,
         language: newLang,
         lockSettings: newLock,
-        hasCompletedTour: prefsRef.current.hasCompletedTour,
-        weatherEnabled: prefsRef.current.weatherEnabled,
+        hasCompletedTour: targetTour,
+        weatherEnabled: targetWeather,
       };
 
       try {
@@ -682,13 +688,23 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
             }
           }
 
-          // Check Weather Attachment preference from Firestore
+          // Check Weather Attachment preference from Firestore (default to true)
+          let isWeatherPrefEnabled = true;
           if (typeof cloudPrefs.weatherEnabled === 'boolean') {
-            setWeatherEnabledState(cloudPrefs.weatherEnabled);
+            isWeatherPrefEnabled = cloudPrefs.weatherEnabled;
+          } else {
             try {
-              localStorage.setItem(STORAGE_KEYS.WEATHER_ENABLED, String(cloudPrefs.weatherEnabled));
+              const localWeather = localStorage.getItem(STORAGE_KEYS.WEATHER_ENABLED);
+              if (localWeather !== null) {
+                isWeatherPrefEnabled = localWeather === 'true';
+              }
             } catch {}
           }
+          setWeatherEnabledState(isWeatherPrefEnabled);
+          prefsRef.current.weatherEnabled = isWeatherPrefEnabled;
+          try {
+            localStorage.setItem(STORAGE_KEYS.WEATHER_ENABLED, String(isWeatherPrefEnabled));
+          } catch {}
 
           // Check Onboarding Tour status from Firestore
           const isTourCompleted = cloudPrefs.hasCompletedTour === true;
@@ -696,6 +712,11 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
           try {
             localStorage.setItem(STORAGE_KEYS.HAS_COMPLETED_TOUR, String(isTourCompleted));
           } catch {}
+
+          // Seed sample entry on sign-in if the user's vault is empty (including if they deleted and re-signed in)
+          checkAndSeedSampleEntry(user.uid, cloudPrefs).catch((err) => {
+            console.warn('[Inkwell Preferences] Sample seed check warning:', err);
+          });
 
           // Auto-trigger tour for first-time sign-in users if not yet completed and not already triggered
           if (!isTourCompleted && !tourAutoTriggeredRef.current) {
@@ -717,6 +738,11 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
             localStorage.setItem(STORAGE_KEYS.LANGUAGE, targetLang);
           } catch {}
 
+          // Seed canonical sample reflection for brand new user
+          checkAndSeedSampleEntry(user.uid, null).catch((err) => {
+            console.warn('[Inkwell Preferences] Sample seed warning on first sign-in:', err);
+          });
+
           saveUserPreferences(user.uid, {
             theme: prefsRef.current.theme,
             themeMode: prefsRef.current.themeMode,
@@ -724,6 +750,9 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
             language: targetLang,
             lockSettings: prefsRef.current.lockSettings,
             hasCompletedTour: false,
+            hasSeededSampleEntry: true,
+            sampleEntrySeededAt: Date.now(),
+            weatherEnabled: true,
           }).catch((err) => {
             console.warn('[Inkwell Preferences] Could not sync initial preferences to Firestore (offline or transient):', err);
           });
@@ -904,6 +933,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const setWeatherEnabled = useCallback(
     async (enabled: boolean) => {
       setWeatherEnabledState(enabled);
+      prefsRef.current.weatherEnabled = enabled;
       try {
         localStorage.setItem(STORAGE_KEYS.WEATHER_ENABLED, String(enabled));
       } catch {}
@@ -913,7 +943,8 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
         prefsRef.current.fontSize,
         prefsRef.current.language,
         prefsRef.current.lockSettings,
-        currentUserRef.current
+        currentUserRef.current,
+        enabled
       );
     },
     [persistPreferencesToCloud]

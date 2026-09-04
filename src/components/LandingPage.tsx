@@ -14,9 +14,11 @@ import {
   Sparkles,
   ChevronDown,
   Check,
-  BookOpen
+  BookOpen,
+  User,
+  Loader2
 } from 'lucide-react';
-import { signInWithGoogle } from '../lib/firebase';
+import { signInWithGoogle, signInAsGuest } from '../lib/firebase';
 import { usePreferences } from '../context/PreferencesContext';
 import { HowToUseModal } from './HowToUseModal';
 import { AppLanguage } from '../types';
@@ -35,6 +37,7 @@ const languagesList: Array<{ id: AppLanguage; label: string; nativeName: string 
 
 export const LandingPage: React.FC<LandingPageProps> = () => {
   const [loading, setLoading] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [langDropdownOpen, setLangDropdownOpen] = useState(false);
   const [howToUseOpen, setHowToUseOpen] = useState(false);
@@ -72,6 +75,19 @@ export const LandingPage: React.FC<LandingPageProps> = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGuestSignIn = async () => {
+    try {
+      setGuestLoading(true);
+      setErrorMsg(null);
+      await signInAsGuest();
+    } catch (err: any) {
+      console.error('Guest sign-in failed:', err);
+      setErrorMsg(err?.message || 'Could not start guest session. Please try again or use Google Sign-In.');
+    } finally {
+      setGuestLoading(false);
     }
   };
 
@@ -146,10 +162,22 @@ export const LandingPage: React.FC<LandingPageProps> = () => {
               )}
             </div>
 
+            {/* Secondary Top Guest Link */}
+            <button
+              id="btn-landing-top-guest"
+              onClick={handleGuestSignIn}
+              disabled={loading || guestLoading}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full theme-bg-subtle hover:theme-bg-hover theme-text-secondary hover:theme-text-primary border theme-border text-xs font-medium transition-colors cursor-pointer active:scale-95 disabled:opacity-60"
+              title={t.continueAsGuestSubtitle}
+            >
+              {guestLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <User className="w-3.5 h-3.5 opacity-70" />}
+              <span>{t.continueAsGuest}</span>
+            </button>
+
             <button
               id="btn-landing-top-signin"
               onClick={handleSignIn}
-              disabled={loading}
+              disabled={loading || guestLoading}
               className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-[#1A73E8] hover:bg-[#1557B0] dark:bg-[#E8A33D] dark:hover:bg-[#D9932E] text-white dark:text-[#171310] text-sm font-semibold transition-all shadow-sm active:scale-95 disabled:opacity-70 cursor-pointer"
             >
               {loading ? t.connecting : t.signInWithGoogle}
@@ -179,47 +207,85 @@ export const LandingPage: React.FC<LandingPageProps> = () => {
 
         {/* Error notification if any */}
         {errorMsg && (
-          <div className="mt-6 p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-200 text-sm max-w-md flex items-start gap-3 text-left">
+          <div className="mt-6 p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-sm max-w-lg flex items-start gap-3 text-left shadow-sm">
             <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold">Sign-in Notice</p>
-              <p className="text-xs mt-0.5">{errorMsg}</p>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-xs sm:text-sm">Sign-in Notice</p>
+              <p className="text-xs mt-1 leading-relaxed text-rose-700 dark:text-rose-300">{errorMsg}</p>
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  onClick={handleSignIn}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1A73E8] hover:bg-[#1557B0] text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Sign In with Google</span>
+                </button>
+                <button
+                  onClick={() => setErrorMsg(null)}
+                  className="px-2.5 py-1.5 rounded-lg theme-bg-subtle hover:theme-bg-hover text-xs font-medium text-rose-700 dark:text-rose-300 transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Primary CTA Button */}
-        <div className="mt-10 flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+        {/* Primary CTA + Secondary Guest Option */}
+        <div className="mt-10 flex flex-col items-center gap-3 w-full max-w-sm sm:max-w-md">
+          {/* Primary Action: Google Sign In */}
           <button
             id="btn-google-signin-hero"
             onClick={handleSignIn}
-            disabled={loading}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-full bg-[#1A73E8] hover:bg-[#1557B0] dark:bg-[#E8A33D] dark:hover:bg-[#D9932E] text-white dark:text-[#171310] font-bold text-base transition-all shadow-md active:scale-[0.98] disabled:opacity-75"
+            disabled={loading || guestLoading}
+            className="w-full inline-flex items-center justify-center gap-3 px-8 py-4 rounded-full bg-[#1A73E8] hover:bg-[#1557B0] dark:bg-[#E8A33D] dark:hover:bg-[#D9932E] text-white dark:text-[#171310] font-bold text-base transition-all shadow-md active:scale-[0.98] disabled:opacity-75 cursor-pointer"
           >
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
-              <path
-                fill="currentColor"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="currentColor"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-              />
-            </svg>
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path
+                  fill="currentColor"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                />
+              </svg>
+            )}
             <span>{loading ? t.connecting : t.signInWithGoogle}</span>
-            <ArrowRight className="w-4 h-4" />
+            {!loading && <ArrowRight className="w-4 h-4" />}
+          </button>
+
+          {/* Secondary Action: Continue as Guest (Firebase Anonymous Auth) */}
+          <button
+            id="btn-continue-as-guest"
+            onClick={handleGuestSignIn}
+            disabled={loading || guestLoading}
+            className="w-full inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full theme-bg-subtle hover:theme-bg-hover text-xs sm:text-sm font-medium theme-text-secondary hover:theme-text-primary border theme-border transition-all shadow-2xs active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+            title={t.continueAsGuestSubtitle}
+          >
+            {guestLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+            ) : (
+              <User className="w-4 h-4 theme-accent-text" />
+            )}
+            <span>{guestLoading ? t.connecting : t.continueAsGuest}</span>
+            <span className="text-[11px] opacity-70 hidden sm:inline">— Try instantly without sign-in</span>
           </button>
         </div>
 
-        <p className="mt-4 text-xs theme-text-secondary">
+        <p className="mt-4 text-xs theme-text-secondary max-w-md">
           {t.landingAuthSub}
         </p>
 

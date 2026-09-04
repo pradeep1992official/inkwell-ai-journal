@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Feather,
-  ShieldCheck,
   LogOut,
   Plus,
   BookOpen,
@@ -12,15 +11,16 @@ import {
   Flame,
   ChevronDown,
   Lock,
-  Download,
-  Upload,
   TrendingUp,
   Sparkles,
   Calendar,
-  MapPin
+  MapPin,
+  ShieldAlert,
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
 import { User } from 'firebase/auth';
-import { logOut } from '../lib/firebase';
+import { logOut, linkGuestWithGoogle } from '../lib/firebase';
 import { usePreferences } from '../context/PreferencesContext';
 
 interface NavbarProps {
@@ -37,12 +37,14 @@ interface NavbarProps {
   onOpenMoodTrends?: () => void;
   onOpenCalendarReview?: () => void;
   onOpenMemories?: () => void;
+  onOpenAskMyLife?: () => void;
   streakCount?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   user,
   onNewEntry,
+  entriesCount = 0,
   sidebarOpen,
   setSidebarOpen,
   onOpenSettings,
@@ -53,11 +55,40 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenMoodTrends,
   onOpenCalendarReview,
   onOpenMemories,
+  onOpenAskMyLife,
   streakCount = 0,
 }) => {
   const { theme, themeMode, toggleTheme, t, lockSettings, lockApp, startTour } = usePreferences();
   const [isAvatarDropdownOpen, setIsAvatarDropdownOpen] = useState(false);
+  const [hasMoreBelow, setHasMoreBelow] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [linkSuccess, setLinkSuccess] = useState(false);
   const avatarMenuRef = useRef<HTMLDivElement>(null);
+  const dropdownScrollRef = useRef<HTMLDivElement>(null);
+
+  const checkScrollAffordance = () => {
+    const el = dropdownScrollRef.current;
+    if (!el) {
+      setHasMoreBelow(false);
+      return;
+    }
+    const canScroll = el.scrollHeight > el.clientHeight + 2 && el.scrollTop + el.clientHeight < el.scrollHeight - 6;
+    setHasMoreBelow(canScroll);
+  };
+
+  useEffect(() => {
+    if (isAvatarDropdownOpen) {
+      const timer = setTimeout(checkScrollAffordance, 60);
+      window.addEventListener('resize', checkScrollAffordance);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('resize', checkScrollAffordance);
+      };
+    } else {
+      setHasMoreBelow(false);
+    }
+  }, [isAvatarDropdownOpen]);
 
   // Close dropdown on outside click or escape
   useEffect(() => {
@@ -73,13 +104,37 @@ export const Navbar: React.FC<NavbarProps> = ({
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
+    if (isAvatarDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscape);
+    }
+
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, []);
+  }, [isAvatarDropdownOpen]);
+
+  const handleLinkGoogle = async () => {
+    setIsLinking(true);
+    setLinkError(null);
+    setLinkSuccess(false);
+    try {
+      await linkGuestWithGoogle();
+      setLinkSuccess(true);
+      setTimeout(() => setLinkSuccess(false), 4000);
+    } catch (err: any) {
+      if (err?.code === 'auth/credential-already-in-use') {
+        setLinkError('This Google account is already linked to another vault. Sign out and sign in directly with Google.');
+      } else if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+        setLinkError('Sign-in popup closed. You can link anytime.');
+      } else {
+        setLinkError(err?.message || 'Could not link account. Please try again.');
+      }
+    } finally {
+      setIsLinking(false);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 theme-bg-surface/95 backdrop-blur-md border-b theme-border theme-text-primary transition-colors shadow-xs shrink-0">
@@ -102,15 +157,22 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="font-gemini-display font-bold text-base sm:text-lg tracking-tight theme-text-primary flex items-center gap-1 truncate">
+                <span className="font-gemini-display font-bold text-base sm:text-lg tracking-tight theme-text-primary flex items-center gap-1.5 truncate">
                   {t.appName}
-                  <span className="text-[10px] sm:text-xs font-semibold px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 text-[#1A73E8] dark:text-[#E8A33D] border border-blue-500/20">
-                    {t.geminiVersion}
-                  </span>
-                </span>
-                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium theme-bg-subtle theme-text-secondary border theme-border">
-                  <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                  {t.vault}
+                  {user?.isAnonymous ? (
+                    <span
+                      id="badge-guest-mode-nav"
+                      title={t.guestModeNotice}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      {t.guestModeBadge}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] sm:text-xs font-semibold px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 text-[#1A73E8] dark:text-[#E8A33D] border border-blue-500/20">
+                      {t.geminiVersion}
+                    </span>
+                  )}
                 </span>
               </div>
               <p className="text-[11px] theme-text-secondary hidden sm:block">
@@ -124,16 +186,16 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {user && (
             <>
-              {/* Google Calendar Schedule & Day Review Button */}
-              {onOpenCalendarReview && (
+              {/* Ask My Life Button */}
+              {onOpenAskMyLife && (
                 <button
-                  id="btn-navbar-calendar-review"
-                  onClick={onOpenCalendarReview}
-                  title="Google Calendar — What happened today? Connect schedule & summarize day"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-[11px] sm:text-xs font-bold transition-all border border-blue-500/20 active:scale-95 shadow-2xs"
+                  id="btn-navbar-ask-my-life"
+                  onClick={onOpenAskMyLife}
+                  title="Ask My Life: Semantic memory search powered by Gemini & vector embeddings"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/15 dark:bg-amber-400/10 dark:hover:bg-amber-400/20 text-[#1A73E8] dark:text-[#E8A33D] font-bold text-xs transition-all border border-[#1A73E8]/20 dark:border-[#E8A33D]/20 active:scale-95"
                 >
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Schedule</span>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Ask My Life</span>
                 </button>
               )}
 
@@ -185,27 +247,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
 
-          {/* Dedicated Settings Button */}
-          <button
-            id="btn-navbar-settings"
-            onClick={onOpenSettings}
-            title={t.settings}
-            className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl theme-text-secondary hover:theme-text-primary theme-bg-subtle hover:theme-bg-hover border theme-border transition-colors focus:outline-none active:scale-95"
-            aria-label={t.settings}
-          >
-            <Settings className="w-4 h-4" />
-          </button>
-
           {/* Avatar with Dropdown containing Settings and Logout */}
           {user && (
             <div className="relative" ref={avatarMenuRef}>
               <button
                 id="btn-user-avatar-menu"
                 onClick={() => setIsAvatarDropdownOpen(!isAvatarDropdownOpen)}
-                title="Account Menu"
+                title={user.isAnonymous ? `${t.guestMode} - Click to link Google Account` : 'Account Menu'}
                 className={`flex items-center gap-1.5 sm:gap-2 p-1 sm:p-1.5 rounded-full sm:rounded-2xl transition-all border active:scale-95 ${
                   isAvatarDropdownOpen
                     ? 'ring-2 ring-[#1A73E8] dark:ring-[#E8A33D] theme-bg-subtle border-transparent'
+                    : user.isAnonymous
+                    ? 'theme-bg-subtle hover:theme-bg-hover border-amber-500/40'
                     : 'theme-bg-subtle hover:theme-bg-hover theme-border'
                 }`}
                 aria-expanded={isAvatarDropdownOpen}
@@ -218,6 +271,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                     className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border theme-border object-cover ring-1 sm:ring-2 ring-white/50 dark:ring-black/50"
                     referrerPolicy="no-referrer"
                   />
+                ) : user.isAnonymous ? (
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-700 dark:text-amber-300 font-bold text-xs">
+                    <UserIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  </div>
                 ) : (
                   <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 border theme-border flex items-center justify-center theme-text-primary font-bold text-xs">
                     {user.displayName ? user.displayName.charAt(0).toUpperCase() : <UserIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
@@ -225,7 +282,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
                 <div className="hidden lg:block text-left pr-1">
                   <div className="text-xs font-semibold theme-text-primary leading-tight truncate max-w-[100px]">
-                    {user.displayName || user.email?.split('@')[0] || 'User'}
+                    {user.isAnonymous ? t.guestModeBadge : (user.displayName || user.email?.split('@')[0] || 'User')}
                   </div>
                 </div>
                 <ChevronDown className={`w-3.5 h-3.5 theme-text-secondary transition-transform duration-200 ${isAvatarDropdownOpen ? 'rotate-180' : ''}`} />
@@ -233,34 +290,120 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               {/* Avatar Dropdown Menu */}
               {isAvatarDropdownOpen && (
-                <div className="absolute right-0 top-full mt-2 z-50 w-64 p-2 rounded-2xl theme-bg-surface border theme-border shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95">
+                <div 
+                  className="absolute right-0 top-full mt-2 z-50 w-64 sm:w-72 rounded-2xl theme-bg-surface border theme-border shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 flex flex-col max-h-[calc(100vh-4.5rem)] sm:max-h-[calc(100vh-5rem)] overflow-hidden"
+                >
                   {/* User Profile Header */}
-                  <div className="p-2.5 rounded-xl theme-bg-subtle/70 border theme-border/60 mb-1.5">
+                  <div className="p-2.5 rounded-t-2xl theme-bg-subtle/70 border-b theme-border/60 shrink-0">
                     <div className="flex items-center gap-2.5">
                       {user.photoURL ? (
                         <img
                           src={user.photoURL}
                           alt={user.displayName || 'User'}
-                          className="w-9 h-9 rounded-full border theme-border object-cover"
+                          className="w-8 h-8 rounded-full border theme-border object-cover shrink-0"
                           referrerPolicy="no-referrer"
                         />
+                      ) : user.isAnonymous ? (
+                        <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+                          <UserIcon className="w-4 h-4" />
+                        </div>
                       ) : (
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#1A73E8] to-[#7B1FA2] text-white flex items-center justify-center font-bold text-sm shadow-xs">
-                          {user.displayName ? user.displayName.charAt(0).toUpperCase() : <UserIcon className="w-4 h-4" />}
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#1A73E8] to-[#7B1FA2] text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+                          {user.displayName ? user.displayName.charAt(0).toUpperCase() : <UserIcon className="w-3.5 h-3.5" />}
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-bold theme-text-primary truncate">
-                          {user.displayName || 'Journal Keeper'}
+                        <div className="text-xs font-bold theme-text-primary truncate flex items-center gap-1.5">
+                          <span>{user.isAnonymous ? t.guestMode : (user.displayName || 'Journal Keeper')}</span>
+                          {user.isAnonymous && (
+                            <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                              Local
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] theme-text-secondary truncate">
-                          {user.email}
+                          {user.isAnonymous ? t.guestModeDisclaimer : user.email}
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-1">
+                  {/* Scrollable Items Container with bounded height */}
+                  <div
+                    ref={dropdownScrollRef}
+                    onScroll={checkScrollAffordance}
+                    className="p-1.5 space-y-0.5 overflow-y-auto flex-1 min-h-0 overscroll-contain focus:outline-none"
+                    tabIndex={-1}
+                  >
+                    {/* Guest Mode Permanent Link Banner */}
+                    {user.isAnonymous && (
+                      <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 space-y-2 mb-1.5 text-left">
+                        <div className="flex items-start gap-2">
+                          <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-amber-800 dark:text-amber-200">
+                              {t.saveDataPermanently}
+                            </div>
+                            <p className="text-[10px] text-amber-700/90 dark:text-amber-300/90 leading-tight mt-0.5">
+                              {t.guestModeNotice}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          id="btn-link-guest-to-google"
+                          onClick={handleLinkGoogle}
+                          disabled={isLinking}
+                          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1A73E8] hover:bg-[#1557B0] dark:bg-[#E8A33D] dark:hover:bg-[#D9932E] text-white dark:text-[#171310] text-xs font-bold transition-all shadow-xs active:scale-95 disabled:opacity-75 cursor-pointer"
+                        >
+                          {isLinking ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-3.5 h-3.5" />
+                          )}
+                          <span>{isLinking ? t.linkingAccount : t.linkGoogleAccount}</span>
+                        </button>
+                        {linkError && (
+                          <p className="text-[10px] text-rose-600 dark:text-rose-400 leading-tight">
+                            {linkError}
+                          </p>
+                        )}
+                        {linkSuccess && (
+                          <p className="text-[10px] text-emerald-600 dark:text-emerald-400 leading-tight flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 shrink-0" />
+                            <span>{t.accountLinkedSuccess}</span>
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Section 1: Journal Tools */}
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 px-2.5 pt-1 pb-0.5">
+                      Journal Tools
+                    </div>
+
+                    {/* Gemini Memory: Ask My Life */}
+                    {onOpenAskMyLife && (
+                      <button
+                        id="btn-dropdown-ask-my-life"
+                        onClick={() => {
+                          setIsAvatarDropdownOpen(false);
+                          onOpenAskMyLife();
+                        }}
+                        title="Natural-language semantic memory search across all journal entries"
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs theme-text-primary hover:theme-bg-subtle transition-colors group"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-md bg-blue-500/10 dark:bg-amber-400/10 text-[#1A73E8] dark:text-[#E8A33D] flex items-center justify-center shrink-0">
+                            <Sparkles className="w-3.5 h-3.5" />
+                          </div>
+                          <span className="font-medium text-xs truncate">Ask My Life</span>
+                        </div>
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-blue-500/10 dark:bg-amber-400/10 text-[#1A73E8] dark:text-[#E8A33D] shrink-0 ml-2">
+                          AI Memory
+                        </span>
+                      </button>
+                    )}
+
                     {/* Google Places: My Memories */}
                     {onOpenMemories && (
                       <button
@@ -269,173 +412,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                           setIsAvatarDropdownOpen(false);
                           onOpenMemories();
                         }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left theme-text-primary hover:theme-bg-subtle transition-colors group"
+                        title="Browse reflections grouped by city & country"
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs theme-text-primary hover:theme-bg-subtle transition-colors group"
                       >
-                        <div className="w-7 h-7 rounded-lg theme-bg-subtle group-hover:bg-emerald-500/10 dark:group-hover:bg-emerald-500/20 flex items-center justify-center theme-text-secondary group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                          <MapPin className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold leading-tight flex items-center justify-between">
-                            <span>My Memories</span>
-                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                              Places
-                            </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                            <MapPin className="w-3.5 h-3.5" />
                           </div>
-                          <div className="text-[10px] theme-text-secondary leading-tight mt-0.5 truncate">
-                            Browse reflections grouped by city
-                          </div>
+                          <span className="font-medium text-xs truncate">My Memories</span>
                         </div>
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 ml-2">
+                          Places
+                        </span>
                       </button>
                     )}
 
-                    {/* Google Calendar: What happened today? */}
-                    {onOpenCalendarReview && (
-                      <button
-                        id="btn-dropdown-calendar-review"
-                        onClick={() => {
-                          setIsAvatarDropdownOpen(false);
-                          onOpenCalendarReview();
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left theme-text-primary hover:theme-bg-subtle transition-colors group"
-                      >
-                        <div className="w-7 h-7 rounded-lg theme-bg-subtle group-hover:bg-blue-500/10 dark:group-hover:bg-blue-500/20 flex items-center justify-center theme-text-secondary group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                          <Calendar className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold leading-tight flex items-center justify-between">
-                            <span>Google Calendar</span>
-                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400">
-                              Schedule
-                            </span>
-                          </div>
-                          <div className="text-[10px] theme-text-secondary leading-tight mt-0.5 truncate">
-                            “What happened today?” Day Review
-                          </div>
-                        </div>
-                      </button>
-                    )}
-
-                    {/* How to Use / User Guide Button */}
-                    {onOpenHowToUse && (
-                      <button
-                        id="btn-dropdown-how-to-use"
-                        onClick={() => {
-                          setIsAvatarDropdownOpen(false);
-                          onOpenHowToUse();
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left theme-text-primary hover:theme-bg-subtle transition-colors group"
-                      >
-                        <div className="w-7 h-7 rounded-lg theme-bg-subtle group-hover:bg-[#1A73E8]/10 dark:group-hover:bg-[#E8A33D]/15 flex items-center justify-center theme-text-secondary group-hover:text-[#1A73E8] dark:group-hover:text-[#E8A33D] transition-colors">
-                          <BookOpen className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold leading-tight flex items-center gap-1.5">
-                            <span>{t.howToUse}</span>
-                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-blue-500/10 dark:bg-amber-500/20 text-[#1A73E8] dark:text-[#E8A33D]">
-                              Guide
-                            </span>
-                          </div>
-                          <div className="text-[10px] theme-text-secondary leading-tight mt-0.5 truncate">
-                            {t.howToUseSubtitle}
-                          </div>
-                        </div>
-                      </button>
-                    )}
-
-                    {/* Interactive Guided Tour Replay Button */}
-                    <button
-                      id="btn-dropdown-interactive-tour"
-                      onClick={() => {
-                        setIsAvatarDropdownOpen(false);
-                        startTour(0);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left theme-text-primary hover:theme-bg-subtle transition-colors group"
-                    >
-                      <div className="w-7 h-7 rounded-lg theme-bg-subtle group-hover:bg-[#1A73E8]/10 dark:group-hover:bg-[#E8A33D]/15 flex items-center justify-center theme-text-secondary group-hover:text-[#1A73E8] dark:group-hover:text-[#E8A33D] transition-colors">
-                        <Sparkles className="w-4 h-4 text-amber-500" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold leading-tight flex items-center justify-between">
-                          <span>{t.onboardingReplay}</span>
-                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                            Tour
-                          </span>
-                        </div>
-                        <div className="text-[10px] theme-text-secondary leading-tight mt-0.5 truncate">
-                          {t.onboardingReplaySubtitle}
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Settings Button */}
-                    <button
-                      id="btn-dropdown-settings"
-                      onClick={() => {
-                        setIsAvatarDropdownOpen(false);
-                        onOpenSettings();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left theme-text-primary hover:theme-bg-subtle transition-colors group"
-                    >
-                      <div className="w-7 h-7 rounded-lg theme-bg-subtle group-hover:bg-[#1A73E8]/10 dark:group-hover:bg-[#E8A33D]/15 flex items-center justify-center theme-text-secondary group-hover:text-[#1A73E8] dark:group-hover:text-[#E8A33D] transition-colors">
-                        <Settings className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold leading-tight">{t.settings}</div>
-                        <div className="text-[10px] theme-text-secondary leading-tight mt-0.5">Preferences, PIN Lock & AI</div>
-                      </div>
-                    </button>
-
-                    {/* Export Vault Button */}
-                    {onOpenExportVault && (
-                      <button
-                        id="btn-dropdown-export"
-                        onClick={() => {
-                          setIsAvatarDropdownOpen(false);
-                          onOpenExportVault();
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left theme-text-primary hover:theme-bg-subtle transition-colors group"
-                      >
-                        <div className="w-7 h-7 rounded-lg theme-bg-subtle group-hover:bg-[#1A73E8]/10 dark:group-hover:bg-[#E8A33D]/15 flex items-center justify-center theme-text-secondary group-hover:text-[#1A73E8] dark:group-hover:text-[#E8A33D] transition-colors">
-                          <Download className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold leading-tight flex items-center justify-between">
-                            <span>Export Vault</span>
-                            <span className="text-[9px] font-medium px-1.5 py-0.2 rounded-full theme-bg-subtle theme-text-secondary">
-                              PDF/MD/JSON
-                            </span>
-                          </div>
-                          <div className="text-[10px] theme-text-secondary leading-tight mt-0.5">Download full backup or entry</div>
-                        </div>
-                      </button>
-                    )}
-
-                    {/* Import Vault Button */}
-                    {onOpenImportVault && (
-                      <button
-                        id="btn-dropdown-import"
-                        onClick={() => {
-                          setIsAvatarDropdownOpen(false);
-                          onOpenImportVault();
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left theme-text-primary hover:theme-bg-subtle transition-colors group"
-                      >
-                        <div className="w-7 h-7 rounded-lg theme-bg-subtle group-hover:bg-[#1A73E8]/10 dark:group-hover:bg-[#E8A33D]/15 flex items-center justify-center theme-text-secondary group-hover:text-[#1A73E8] dark:group-hover:text-[#E8A33D] transition-colors">
-                          <Upload className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold leading-tight flex items-center justify-between">
-                            <span>{t.importData || 'Import Backup'}</span>
-                            <span className="text-[9px] font-medium px-1.5 py-0.2 rounded-full theme-bg-subtle theme-text-secondary">
-                              JSON
-                            </span>
-                          </div>
-                          <div className="text-[10px] theme-text-secondary leading-tight mt-0.5">Restore reflections into vault</div>
-                        </div>
-                      </button>
-                    )}
-
-                    {/* Streak & Stats Option (Clickable - opens heatmap/calendar modal) */}
+                    {/* Streak & Stats Option (Single consolidated streak & heatmap view) */}
                     {onOpenStreakModal && (
                       <button
                         id="btn-dropdown-streak"
@@ -443,21 +435,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                           setIsAvatarDropdownOpen(false);
                           onOpenStreakModal();
                         }}
-                        title="Click to view full streak calendar & activity heatmap"
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left theme-text-primary hover:theme-bg-subtle transition-colors group"
+                        title="View your daily journaling streak calendar & activity heatmap"
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs theme-text-primary hover:theme-bg-subtle transition-colors group"
                       >
-                        <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
-                          <Flame className="w-4 h-4 fill-amber-500" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold leading-tight flex items-center justify-between">
-                            <span>Journaling Streak</span>
-                            <span className="text-[10px] text-[#1A73E8] dark:text-[#E8A33D] font-bold group-hover:underline">
-                              View Heatmap
-                            </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-md bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+                            <Flame className="w-3.5 h-3.5 fill-amber-500" />
                           </div>
-                          <div className="text-[10px] theme-text-secondary leading-tight mt-0.5">{streakCount} consecutive days</div>
+                          <span className="font-medium text-xs truncate">Journaling Streak</span>
                         </div>
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 ml-2">
+                          {streakCount}d streak
+                        </span>
                       </button>
                     )}
 
@@ -469,27 +458,79 @@ export const Navbar: React.FC<NavbarProps> = ({
                           setIsAvatarDropdownOpen(false);
                           onOpenMoodTrends();
                         }}
-                        title="Observational view of your emotional patterns over time"
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left theme-text-primary hover:theme-bg-subtle transition-colors group"
+                        title="Observational emotional arc and sentiment patterns over time"
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs theme-text-primary hover:theme-bg-subtle transition-colors group"
                       >
-                        <div className="w-7 h-7 rounded-lg bg-blue-500/10 dark:bg-purple-500/10 flex items-center justify-center text-[#1A73E8] dark:text-[#E8A33D] group-hover:scale-110 transition-transform">
-                          <TrendingUp className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold leading-tight flex items-center justify-between">
-                            <span>{t.moodTrends}</span>
-                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-blue-500/10 dark:bg-amber-500/20 text-[#1A73E8] dark:text-[#E8A33D]">
-                              Trends
-                            </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-md bg-blue-500/10 dark:bg-purple-500/15 text-[#1A73E8] dark:text-[#E8A33D] flex items-center justify-center shrink-0">
+                            <TrendingUp className="w-3.5 h-3.5" />
                           </div>
-                          <div className="text-[10px] theme-text-secondary leading-tight mt-0.5 truncate">
-                            {t.moodTrendsSubtitle}
-                          </div>
+                          <span className="font-medium text-xs truncate">{t.moodTrends}</span>
                         </div>
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-blue-500/10 dark:bg-purple-500/15 text-[#1A73E8] dark:text-[#E8A33D] shrink-0 ml-2">
+                          Trends
+                        </span>
                       </button>
                     )}
 
-                    {/* Lock App Option with Safe No-PIN Guard */}
+                    {/* Google Calendar: Day Review */}
+                    {onOpenCalendarReview && (
+                      <button
+                        id="btn-dropdown-calendar-review"
+                        onClick={() => {
+                          setIsAvatarDropdownOpen(false);
+                          onOpenCalendarReview();
+                        }}
+                        title="Summarize today's calendar meetings and day schedule into a reflection"
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs theme-text-primary hover:theme-bg-subtle transition-colors group"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                            <Calendar className="w-3.5 h-3.5" />
+                          </div>
+                          <span className="font-medium text-xs truncate">Google Calendar</span>
+                        </div>
+                        {user.isAnonymous ? (
+                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-sm bg-amber-500/15 text-amber-700 dark:text-amber-300 shrink-0 ml-2 border border-amber-500/30">
+                            Google Sign-in
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0 ml-2">
+                            Schedule
+                          </span>
+                        )}
+                      </button>
+                    )}
+
+                    <div className="border-t theme-border/60 my-1" />
+
+                    {/* Section 2: Account & Settings */}
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 px-2.5 pt-1 pb-0.5">
+                      Account & Security
+                    </div>
+
+                    {/* Settings (includes Help & Data Management) */}
+                    <button
+                      id="btn-dropdown-settings"
+                      onClick={() => {
+                        setIsAvatarDropdownOpen(false);
+                        onOpenSettings();
+                      }}
+                      title="Preferences, Themes, PIN Lock, Help & Data Management"
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs theme-text-primary hover:theme-bg-subtle transition-colors group"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-6 h-6 rounded-md theme-bg-subtle text-gray-600 dark:text-gray-300 flex items-center justify-center shrink-0">
+                          <Settings className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="font-medium text-xs truncate">{t.settings}</span>
+                      </div>
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400 shrink-0 ml-2">
+                        Preferences
+                      </span>
+                    </button>
+
+                    {/* Lock App Option */}
                     {lockSettings.enabled && lockSettings.pinHash ? (
                       <button
                         id="btn-dropdown-lock"
@@ -497,16 +538,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                           setIsAvatarDropdownOpen(false);
                           lockApp();
                         }}
-                        title="Immediately lock the application"
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left theme-text-primary hover:theme-bg-subtle transition-colors group"
+                        title="Immediately lock the application — requires PIN to resume (Shortcut: Alt+L or Ctrl+Shift+L)"
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs theme-text-primary hover:theme-bg-subtle transition-colors group"
                       >
-                        <div className="w-7 h-7 rounded-lg bg-blue-500/10 dark:bg-amber-500/10 flex items-center justify-center text-[#1A73E8] dark:text-[#E8A33D] group-hover:scale-105 transition-transform">
-                          <Lock className="w-4 h-4" />
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-md bg-blue-500/10 dark:bg-amber-500/15 text-[#1A73E8] dark:text-[#E8A33D] flex items-center justify-center shrink-0">
+                            <Lock className="w-3.5 h-3.5" />
+                          </div>
+                          <span className="font-medium text-xs truncate">Lock Journal Now</span>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold leading-tight">Lock Journal Now</div>
-                          <div className="text-[10px] theme-text-secondary leading-tight mt-0.5">Require PIN to resume</div>
-                        </div>
+                        <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-blue-500/10 dark:bg-amber-500/15 text-[#1A73E8] dark:text-[#E8A33D] shrink-0 ml-2 border border-[#1A73E8]/20 dark:border-[#E8A33D]/20">
+                          Alt+L
+                        </span>
                       </button>
                     ) : (
                       <button
@@ -515,44 +558,48 @@ export const Navbar: React.FC<NavbarProps> = ({
                           setIsAvatarDropdownOpen(false);
                           onOpenSettings();
                         }}
-                        title="App Lock is unconfigured — Click to set up a secure PIN in Settings"
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left theme-text-secondary hover:theme-text-primary hover:theme-bg-subtle transition-colors group"
+                        title="App Lock is unconfigured — Click to set up a secure PIN in Settings (Shortcut: Alt+L)"
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs theme-text-secondary hover:theme-text-primary hover:theme-bg-subtle transition-colors group"
                       >
-                        <div className="w-7 h-7 rounded-lg theme-bg-subtle flex items-center justify-center theme-text-secondary group-hover:text-amber-500 transition-colors">
-                          <Lock className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold leading-tight flex items-center justify-between">
-                            <span>Lock Journal Now</span>
-                            <span className="text-[9px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded-full">
-                              Setup PIN
-                            </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-md theme-bg-subtle text-gray-500 flex items-center justify-center shrink-0">
+                            <Lock className="w-3.5 h-3.5" />
                           </div>
-                          <div className="text-[10px] theme-text-secondary leading-tight mt-0.5">Set up a PIN in Settings to use this</div>
+                          <span className="font-medium text-xs truncate">Lock Journal Now</span>
                         </div>
+                        <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 ml-2 border border-amber-500/20">
+                          Alt+L
+                        </span>
                       </button>
                     )}
+
+                    <div className="border-t theme-border/60 my-1" />
+
+                    {/* Sign Out */}
+                    <button
+                      id="btn-dropdown-logout"
+                      onClick={() => {
+                        setIsAvatarDropdownOpen(false);
+                        logOut();
+                      }}
+                      title="Sign out of your account"
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-6 h-6 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                          <LogOut className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="font-semibold text-xs truncate">{t.signOut}</span>
+                      </div>
+                    </button>
                   </div>
 
-                  <div className="border-t theme-border my-1.5" />
-
-                  {/* Sign Out / Logout Button */}
-                  <button
-                    id="btn-dropdown-logout"
-                    onClick={() => {
-                      setIsAvatarDropdownOpen(false);
-                      logOut();
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors group"
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-400 group-hover:bg-rose-500/20 transition-colors">
-                      <LogOut className="w-4 h-4" />
+                  {/* Scroll affordance gradient fade at bottom edge */}
+                  {hasMoreBelow && (
+                    <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-[var(--bg-surface)] to-transparent flex items-end justify-center pb-0.5 transition-opacity duration-200">
+                      <ChevronDown className="w-3.5 h-3.5 theme-text-secondary animate-pulse opacity-70" />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold leading-tight">{t.signOut}</div>
-                      <div className="text-[10px] opacity-80 leading-tight mt-0.5">End active session</div>
-                    </div>
-                  </button>
+                  )}
                 </div>
               )}
             </div>

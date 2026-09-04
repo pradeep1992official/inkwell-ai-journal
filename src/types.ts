@@ -25,6 +25,8 @@ export interface UserPreferences {
   focusMode?: boolean;
   hasCompletedTour?: boolean;
   tourCompletedAt?: number;
+  hasSeededSampleEntry?: boolean;
+  sampleEntrySeededAt?: number;
   weatherEnabled?: boolean;
   updatedAt?: number;
 }
@@ -80,6 +82,15 @@ export interface WeatherData {
   isBackfilled?: boolean;
 }
 
+export interface AttachedImage {
+  url: string;
+  storagePath: string;
+  fileName?: string;
+  fileSizeBytes?: number;
+  mimeType?: string;
+  uploadedAt?: number;
+}
+
 export interface EntryMetadata {
   mood?: string;
   tags?: string[];
@@ -87,9 +98,12 @@ export interface EntryMetadata {
   location?: string;
   placeLocation?: LocationMemory | null;
   weather?: WeatherData | null;
+  attachedImage?: AttachedImage | null;
   sentimentScore?: number;
   wordCount?: number;
   editedAt?: number;
+  isSample?: boolean;
+  hasCustomTitle?: boolean;
   [key: string]: unknown; // Extensibility for future modular metadata without schema breakage
 }
 
@@ -100,10 +114,39 @@ export interface JournalEntry {
   summary?: string;
   messages: JournalMessage[];
   metadata: EntryMetadata;
+  attachedImage?: AttachedImage | null;
   createdAt: number;
   updatedAt: number;
   editedAt?: number;
   deletedAt?: number | null;
+  isSample?: boolean;
+  embedding?: number[]; // Vector embedding for Ask My Life semantic similarity search
+  embeddingUpdatedAt?: number;
+  embeddingModel?: string;
+}
+
+export interface MemoryCitation {
+  id: string;
+  title: string;
+  dateFormatted: string;
+  timestamp: number;
+  similarityScore: number;
+  snippet: string;
+  mood?: string;
+  tags?: string[];
+  location?: string;
+  summary?: string;
+}
+
+export interface AskMyLifeResult {
+  answer: string;
+  citations: MemoryCitation[];
+  modelUsed?: string;
+  isFallback?: boolean;
+  totalSearched: number;
+  queryTimeMs: number;
+  status: 'success' | 'no_matches' | 'error';
+  suggestedFollowUps?: string[];
 }
 
 export interface CalendarEventItem {

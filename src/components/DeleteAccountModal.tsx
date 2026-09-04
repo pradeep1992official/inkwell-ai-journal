@@ -45,8 +45,12 @@ export const DeleteAccountModal: React.FC<DeleteAccountModalProps> = ({
   // Handle Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen && !isDeleting && !isSuccess) {
-        onClose();
+      if (e.key === 'Escape' && isOpen && !isDeleting) {
+        if (isSuccess) {
+          handleFinalSignOut();
+        } else {
+          onClose();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -95,8 +99,12 @@ export const DeleteAccountModal: React.FC<DeleteAccountModalProps> = ({
     <div 
       className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={() => {
-        if (!isDeleting && !isSuccess) {
-          onClose();
+        if (!isDeleting) {
+          if (isSuccess) {
+            handleFinalSignOut();
+          } else {
+            onClose();
+          }
         }
       }}
     >

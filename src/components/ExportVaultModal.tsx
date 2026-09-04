@@ -46,7 +46,7 @@ export const ExportVaultModal: React.FC<ExportVaultModalProps> = ({
 
       if (scope === 'current' && currentEntry && !currentEntry.deletedAt) {
         if (format === 'pdf') {
-          exportEntryToPdf(currentEntry);
+          await exportEntryToPdf(currentEntry);
         } else if (format === 'markdown') {
           downloadEntryMarkdown(currentEntry);
         } else if (format === 'text') {
@@ -56,7 +56,7 @@ export const ExportVaultModal: React.FC<ExportVaultModalProps> = ({
         }
       } else {
         if (format === 'pdf') {
-          exportAllEntriesToPdf(activeEntries);
+          await exportAllEntriesToPdf(activeEntries);
         } else if (format === 'markdown') {
           downloadAllEntriesMarkdown(activeEntries);
         } else if (format === 'text') {

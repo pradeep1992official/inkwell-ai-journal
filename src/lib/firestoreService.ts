@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { JournalEntry, UserPreferences, PreferenceFetchResult } from '../types';
+import { deleteEntryImage } from './storageService';
 
 /**
  * Strips all undefined values recursively to ensure Firestore zero-crash payload hygiene.
@@ -123,14 +124,100 @@ export async function restoreJournalEntry(userId: string, entryId: string): Prom
 }
 
 /**
- * Permanently hard deletes a journal entry from /users/{userId}/entries/{entryId}.
+ * Permanently hard deletes a journal entry from /users/{userId}/entries/{entryId} and removes any attached image.
  */
 export async function hardDeleteJournalEntry(userId: string, entryId: string): Promise<void> {
   if (!userId || !entryId) {
     throw new Error('User ID and Entry ID are required to delete.');
   }
   const entryRef = doc(db, 'users', userId, 'entries', entryId);
+  try {
+    const snap = await getDoc(entryRef);
+    if (snap.exists()) {
+      const data = snap.data() as JournalEntry;
+      const imagePath = data.attachedImage?.storagePath || data.metadata?.attachedImage?.storagePath;
+      if (imagePath) {
+        await deleteEntryImage(imagePath).catch((err) => {
+          console.warn('[Firestore Service] Failed to delete associated image on hard delete:', err);
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[Firestore Service] Warning fetching entry before hard delete:', err);
+  }
   await deleteDoc(entryRef);
+}
+
+/**
+ * Detects whether an entry is an empty/orphaned reflection created without actual content.
+ * Only returns true if there is NO user-written text in messages, NO mood, NO tags,
+ * NO summary, and default/empty title.
+ */
+export function isEntryEmptyOrphan(entry: JournalEntry): boolean {
+  if (!entry) return true;
+  if (entry.isSample || entry.metadata?.isSample) return false;
+
+  // Has any message with non-empty content
+  const hasMessages = Array.isArray(entry.messages) && 
+    entry.messages.some(m => typeof m.content === 'string' && m.content.trim().length > 0);
+  if (hasMessages) return false;
+
+  // Has mood
+  if (entry.metadata?.mood && typeof entry.metadata.mood === 'string' && entry.metadata.mood.trim().length > 0) {
+    return false;
+  }
+
+  // Has tags
+  if (Array.isArray(entry.metadata?.tags) && entry.metadata.tags.length > 0) {
+    return false;
+  }
+
+  // Has summary
+  if (entry.summary && typeof entry.summary === 'string' && entry.summary.trim().length > 0) {
+    return false;
+  }
+
+  // Has custom title (anything other than 'New Reflection', 'Untitled', or empty)
+  const defaultTitles = ['new reflection', 'untitled', 'untitled reflection', ''];
+  const currentTitle = (entry.title || '').trim().toLowerCase();
+  if (currentTitle && !defaultTitles.includes(currentTitle)) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * One-time migration/cleanup to permanently remove any existing empty/orphaned entries from Firestore.
+ * Safely removes entries with no messages, no mood, no tags, and no summary.
+ */
+export async function cleanUpEmptyOrphanedEntries(userId: string): Promise<number> {
+  if (!userId) return 0;
+  try {
+    const entriesRef = collection(db, 'users', userId, 'entries');
+    const snapshot = await getDocs(entriesRef);
+    let deletedCount = 0;
+    const batch = writeBatch(db);
+    let batchCount = 0;
+
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as JournalEntry;
+      if (isEntryEmptyOrphan(data)) {
+        batch.delete(docSnap.ref);
+        batchCount++;
+        deletedCount++;
+      }
+    });
+
+    if (batchCount > 0) {
+      await batch.commit();
+      console.log(`Cleaned up ${deletedCount} empty orphaned journal entries from Firestore.`);
+    }
+    return deletedCount;
+  } catch (err) {
+    console.warn('Failed to cleanup empty orphaned entries:', err);
+    return 0;
+  }
 }
 
 /**
@@ -396,43 +483,50 @@ export async function purgeAllUserData(userId: string): Promise<void> {
     throw new Error('User ID is required to delete user data.');
   }
 
-  // 1. Fetch and delete all entries
+  // 1. Fetch and delete all entries in safe chunks
   const entriesCol = collection(db, 'users', userId, 'entries');
   const entriesSnapshot = await getDocs(entriesCol);
   
-  const batch = writeBatch(db);
-  entriesSnapshot.forEach((docSnap) => {
-    batch.delete(docSnap.ref);
-  });
+  const CHUNK_SIZE = 400;
+  const docs = entriesSnapshot.docs;
+  for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+    const chunk = docs.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
 
   // 2. Fetch and delete all settings docs
   const settingsCol = collection(db, 'users', userId, 'settings');
   const settingsSnapshot = await getDocs(settingsCol);
-  settingsSnapshot.forEach((docSnap) => {
-    batch.delete(docSnap.ref);
-  });
+  if (!settingsSnapshot.empty) {
+    const settingsBatch = writeBatch(db);
+    settingsSnapshot.forEach((docSnap) => {
+      settingsBatch.delete(docSnap.ref);
+    });
+    await settingsBatch.commit();
+  }
 
   // 3. Delete root user doc
-  const userDocRef = doc(db, 'users', userId);
-  batch.delete(userDocRef);
+  try {
+    const userDocRef = doc(db, 'users', userId);
+    await deleteDoc(userDocRef);
+  } catch (e) {
+    console.warn('Root user doc deletion warning:', e);
+  }
 
-  // Commit batch delete
-  await batch.commit();
-
-  // 4. Clean up all local storage associated with inkwell
+  // 4. Clean up all local storage and session storage associated with inkwell
   if (typeof window !== 'undefined') {
     try {
-      const keysToRemove = [
-        'inkwell_pref_theme',
-        'inkwell_pref_theme_mode',
-        'inkwell_pref_font_size',
-        'inkwell_pref_language',
-        'inkwell_prelogin_language_selected',
-        'inkwell_lock_settings',
-        'inkwell_last_activity',
-        'inkwell_is_locked',
-      ];
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('inkwell_') || key.includes(userId))) {
+          keysToRemove.push(key);
+        }
+      }
       keysToRemove.forEach((k) => localStorage.removeItem(k));
+      sessionStorage.clear();
     } catch (e) {
       console.warn('Could not clear localStorage keys:', e);
     }

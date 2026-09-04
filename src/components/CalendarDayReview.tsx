@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { CalendarEventItem, DaySynthesisData, JournalEntry } from '../types';
 import { fetchCalendarEvents, requestDaySynthesis, SAMPLE_TODAY_EVENTS } from '../lib/calendarService';
-import { requestGoogleCalendarAccess, getStoredCalendarToken, getStoredCalendarEmail, clearStoredCalendarToken } from '../lib/firebase';
+import { requestGoogleCalendarAccess, getStoredCalendarToken, getStoredCalendarEmail, clearStoredCalendarToken, auth, linkGuestWithGoogle } from '../lib/firebase';
 import { usePreferences } from '../context/PreferencesContext';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
@@ -282,6 +282,34 @@ export const CalendarDayReview: React.FC<CalendarDayReviewProps> = ({
           {/* Body Content */}
           <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
             {/* Status & Connection Banner */}
+            {auth.currentUser?.isAnonymous && (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-start gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-semibold text-amber-800 dark:text-amber-200">Guest Mode Active</strong>
+                    <p className="text-amber-700/90 dark:text-amber-300/90 mt-0.5">
+                      Live Google Calendar sync requires Google Sign-In. You can explore full AI day reflection below with this realistic sample schedule, or link your Google account to sync your real calendar.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      await linkGuestWithGoogle();
+                      await loadEvents();
+                    } catch (e: any) {
+                      setAuthError(e?.message || 'Could not link account');
+                    }
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1A73E8] hover:bg-[#1557B0] text-white text-xs font-semibold shrink-0 transition-colors shadow-xs"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Link Google Account</span>
+                </button>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl theme-bg-subtle border theme-border">
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
@@ -300,7 +328,7 @@ export const CalendarDayReview: React.FC<CalendarDayReviewProps> = ({
                         Account: <strong className="font-semibold theme-text-primary">{calendarEmail || 'Primary Google Account'}</strong>
                       </span>
                     ) : (
-                      <span>Sign in to fetch your real Google Calendar schedule</span>
+                      <span>{auth.currentUser?.isAnonymous ? 'Exploring with sample timeline events' : 'Sign in to fetch your real Google Calendar schedule'}</span>
                     )}
                   </div>
                 </div>
@@ -344,7 +372,7 @@ export const CalendarDayReview: React.FC<CalendarDayReviewProps> = ({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors disabled:opacity-60 active:scale-95"
                   >
                     <Calendar className="w-3.5 h-3.5" />
-                    {isConnecting ? 'Connecting...' : 'Connect Google Calendar'}
+                    {isConnecting ? 'Connecting...' : auth.currentUser?.isAnonymous ? 'Connect Account' : 'Connect Google Calendar'}
                   </button>
                 )}
               </div>
@@ -353,7 +381,9 @@ export const CalendarDayReview: React.FC<CalendarDayReviewProps> = ({
             {authError && (
               <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{authError}</span>
+                <div className="prose-inline">
+                  <ReactMarkdown remarkPlugins={[remarkBreaks, remarkGfm]}>{authError}</ReactMarkdown>
+                </div>
               </div>
             )}
 
@@ -464,9 +494,9 @@ export const CalendarDayReview: React.FC<CalendarDayReviewProps> = ({
             {synthesisError && (
               <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-700 dark:text-rose-300 flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold">Synthesis Notice</p>
-                  <p>{synthesisError}</p>
+                <div className="prose-inline leading-relaxed min-w-0">
+                  <p className="font-semibold mb-0.5">Synthesis Notice</p>
+                  <ReactMarkdown remarkPlugins={[remarkBreaks, remarkGfm]}>{synthesisError}</ReactMarkdown>
                 </div>
               </div>
             )}

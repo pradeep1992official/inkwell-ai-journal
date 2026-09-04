@@ -319,6 +319,27 @@ export interface TranslationDictionary {
   tourStep5Desc: string;
   tourStep6Title: string;
   tourStep6Desc: string;
+
+  // Sample Reflection & Welcome Guide
+  sample: string;
+  sampleReflection: string;
+  whatYouCanDo: string;
+  sampleEntryTip: string;
+
+  // Guest Mode & Anonymous Auth
+  continueAsGuest: string;
+  continueAsGuestSubtitle: string;
+  guestMode: string;
+  guestModeBadge: string;
+  guestModeNotice: string;
+  guestModeDisclaimer: string;
+  guestModeWarning: string;
+  linkGoogleAccount: string;
+  saveDataPermanently: string;
+  linkingAccount: string;
+  accountLinkedSuccess: string;
+  guestCalendarNotice: string;
+  guestCalendarBtn: string;
 }
 
 export const translations: Record<Language, TranslationDictionary> = {
@@ -502,7 +523,7 @@ export const translations: Record<Language, TranslationDictionary> = {
     insights: 'Insights',
     copyInsights: 'Copy Insights',
     copied: 'Copied',
-    saveStatusSaved: 'Saved to Vault',
+    saveStatusSaved: '',
     saveStatusSaving: 'Saving...',
     saveStatusError: 'Save Error',
     untitledReflection: 'Untitled Reflection',
@@ -623,6 +644,26 @@ export const translations: Record<Language, TranslationDictionary> = {
     tourStep5Desc: 'Extract mindful summaries, core realizations, and discover longitudinal patterns in your emotional trajectory.',
     tourStep6Title: 'Themes, Backup & App Lock',
     tourStep6Desc: 'Personalize with 5 themes, streak heatmaps, multi-format export/import, and secure your reflections with 4-Digit PIN App Lock.',
+
+    sample: 'Sample',
+    sampleReflection: 'Sample Reflection',
+    whatYouCanDo: 'What you can do in Inkwell',
+    sampleEntryTip: 'This is a sample reflection to help you explore. Feel free to test out the tools, edit it, or delete it whenever you’re ready to write your own.',
+
+    // Guest Mode & Anonymous Auth
+    continueAsGuest: 'Continue as Guest',
+    continueAsGuestSubtitle: 'Try Inkwell instantly without a Google account. Data stays on this browser.',
+    guestMode: 'Guest Mode',
+    guestModeBadge: 'Guest',
+    guestModeNotice: 'Guest Mode: Reflections are stored locally in this browser. To preserve your entries permanently across devices, link your Google account.',
+    guestModeDisclaimer: 'Device-only storage. Clearing cookies or browsing data will reset this session.',
+    guestModeWarning: 'Guest data is not synced across devices.',
+    linkGoogleAccount: 'Link Google Account',
+    saveDataPermanently: 'Save Data Permanently',
+    linkingAccount: 'Linking account...',
+    accountLinkedSuccess: 'Google Account successfully linked! Your reflections are now permanently protected.',
+    guestCalendarNotice: 'Google Calendar integration requires a real Google account. Sign in with Google to connect your live schedule.',
+    guestCalendarBtn: 'Sign in to Connect Calendar',
   },
 
   es: {
@@ -805,7 +846,7 @@ export const translations: Record<Language, TranslationDictionary> = {
     insights: 'Análisis',
     copyInsights: 'Copiar Análisis',
     copied: 'Copiado',
-    saveStatusSaved: 'Guardado en Bóveda',
+    saveStatusSaved: '',
     saveStatusSaving: 'Guardando...',
     saveStatusError: 'Error al guardar',
     untitledReflection: 'Reflexión sin título',
@@ -926,6 +967,26 @@ export const translations: Record<Language, TranslationDictionary> = {
     tourStep5Desc: 'Extrae resúmenes conscientes, aprendizajes clave y descubre patrones longitudinales en tu trayectoria emocional.',
     tourStep6Title: 'Temas, Respaldos y Bloqueo Seguro',
     tourStep6Desc: 'Personaliza con 5 temas, rachas, exportación/importación y protege tus pensamientos con Bloqueo por PIN de 4 dígitos.',
+
+    sample: 'Muestra',
+    sampleReflection: 'Reflexión de Muestra',
+    whatYouCanDo: 'Lo que puedes hacer en Inkwell',
+    sampleEntryTip: 'Esta es una reflexión de muestra para ayudarte a explorar. Puedes editarla, probar las herramientas o eliminarla cuando desees escribir la tuya.',
+
+    // Guest Mode & Anonymous Auth
+    continueAsGuest: 'Continuar como Invitado',
+    continueAsGuestSubtitle: 'Prueba Inkwell al instante sin cuenta de Google. Los datos quedan en este navegador.',
+    guestMode: 'Modo Invitado',
+    guestModeBadge: 'Invitado',
+    guestModeNotice: 'Modo Invitado: Las reflexiones se guardan en este navegador. Para conservar tus entradas permanentemente, vincula tu cuenta de Google.',
+    guestModeDisclaimer: 'Almacenamiento local. Borrar cookies o datos del navegador reiniciará esta sesión.',
+    guestModeWarning: 'Los datos de invitado no se sincronizan entre dispositivos.',
+    linkGoogleAccount: 'Vincular Cuenta de Google',
+    saveDataPermanently: 'Guardar Datos Permanentemente',
+    linkingAccount: 'Vinculando cuenta...',
+    accountLinkedSuccess: '¡Cuenta de Google vinculada con éxito! Tus reflexiones ahora están protegidas permanentemente.',
+    guestCalendarNotice: 'La integración con Google Calendar requiere una cuenta de Google real. Inicia sesión con Google para conectar tu agenda.',
+    guestCalendarBtn: 'Acceder para Conectar Calendario',
   },
 
   fr: {
@@ -1108,7 +1169,7 @@ export const translations: Record<Language, TranslationDictionary> = {
     insights: 'Synthèse',
     copyInsights: 'Copier la Synthèse',
     copied: 'Copié',
-    saveStatusSaved: 'Enregistré dans le Coffre',
+    saveStatusSaved: '',
     saveStatusSaving: 'Enregistrement...',
     saveStatusError: 'Erreur d\'enregistrement',
     untitledReflection: 'Réflexion sans titre',
@@ -1229,6 +1290,26 @@ export const translations: Record<Language, TranslationDictionary> = {
     tourStep5Desc: 'Générez des synthèses conscientes, des prises de conscience et visualisez l\'évolution de votre trajectoire émotionnelle.',
     tourStep6Title: 'Thèmes, Sauvegarde & Verrouillage',
     tourStep6Desc: 'Personnalisez avec 5 thèmes, calendrier de régularité, export/import et sécurisez vos réflexions par code PIN à 4 chiffres.',
+
+    sample: 'Exemple',
+    sampleReflection: 'Réflexion d’Exemple',
+    whatYouCanDo: 'Ce que vous pouvez faire dans Inkwell',
+    sampleEntryTip: 'Ceci est une réflexion d’exemple pour vous aider à explorer. Vous pouvez la modifier, tester les outils ou la supprimer quand vous serez prêt.',
+
+    // Guest Mode & Anonymous Auth
+    continueAsGuest: 'Continuer en tant qu’Invité',
+    continueAsGuestSubtitle: 'Essayez Inkwell instantanément sans compte Google. Vos données restent sur ce navigateur.',
+    guestMode: 'Mode Invité',
+    guestModeBadge: 'Invité',
+    guestModeNotice: 'Mode Invité : Vos réflexions sont enregistrées sur ce navigateur. Pour les conserver de façon permanente, associez votre compte Google.',
+    guestModeDisclaimer: 'Stockage local uniquement. Vider les cookies ou les données réinitialisera cette session.',
+    guestModeWarning: 'Les données d’invité ne sont pas synchronisées entre appareils.',
+    linkGoogleAccount: 'Associer un Compte Google',
+    saveDataPermanently: 'Sauvegarder Définitivement',
+    linkingAccount: 'Association du compte...',
+    accountLinkedSuccess: 'Compte Google associé avec succès ! Vos réflexions sont désormais protégées en permanence.',
+    guestCalendarNotice: 'L’intégration Google Agenda nécessite un vrai compte Google. Connectez-vous avec Google pour lier votre emploi du temps.',
+    guestCalendarBtn: 'Se connecter pour lier l’Agenda',
   },
 
   hi: {
@@ -1411,7 +1492,7 @@ export const translations: Record<Language, TranslationDictionary> = {
     insights: 'इनसाइट्स',
     copyInsights: 'इनसाइट्स कॉपी करें',
     copied: 'कॉपी हो गया',
-    saveStatusSaved: 'वॉल्ट में सुरक्षित',
+    saveStatusSaved: '',
     saveStatusSaving: 'सहेजा जा रहा है...',
     saveStatusError: 'सहेजने में त्रुटि',
     untitledReflection: 'शीर्षकहीन चिंतन',
@@ -1532,6 +1613,26 @@ export const translations: Record<Language, TranslationDictionary> = {
     tourStep5Desc: 'विचारशील सारांश व मुख्य अनुभूतियाँ प्राप्त करें और समय के साथ अपनी मनोदशा के रुझानों को देखें।',
     tourStep6Title: 'थीम, बैकअप और सुरक्षा लॉक',
     tourStep6Desc: '5 थीम, निरंतरता स्ट्रीक, निर्यात/आयात अनुकूलित करें और 4-अंकीय पिन लॉक से डायरी सुरक्षित रखें।',
+
+    sample: 'नमूना',
+    sampleReflection: 'नमूना चिंतन',
+    whatYouCanDo: 'Inkwell में आप क्या कर सकते हैं',
+    sampleEntryTip: 'यह आपको परिचित कराने के लिए एक नमूना चिंतन है। आप इसे संपादित कर सकते हैं, टूल आज़मा सकते हैं, या अपनी डायरी लिखने के लिए इसे कभी भी हटा सकते हैं।',
+
+    // Guest Mode & Anonymous Auth
+    continueAsGuest: 'अतिथि के रूप में जारी रखें',
+    continueAsGuestSubtitle: 'Google खाते के बिना तुरंत आज़माएँ। डेटा केवल इस ब्राउज़र में रहेगा।',
+    guestMode: 'अतिथि मोड',
+    guestModeBadge: 'अतिथि',
+    guestModeNotice: 'अतिथि मोड: चिंतन केवल इस ब्राउज़र में सहेजे गए हैं। डेटा को हमेशा सुरक्षित रखने के लिए अपना Google खाता जोड़ें।',
+    guestModeDisclaimer: 'केवल डिवाइस संग्रहण। ब्राउज़र कुकीज़ हटाने पर यह सत्र रीसेट हो जाएगा।',
+    guestModeWarning: 'अतिथि डेटा अन्य डिवाइस पर सिंक नहीं होता है।',
+    linkGoogleAccount: 'Google खाता लिंक करें',
+    saveDataPermanently: 'डेटा स्थायी रूप से सुरक्षित करें',
+    linkingAccount: 'खाता लिंक हो रहा है...',
+    accountLinkedSuccess: 'Google खाता सफलतापूर्वक लिंक हो गया! आपके चिंतन अब स्थायी रूप से सुरक्षित हैं।',
+    guestCalendarNotice: 'Google Calendar एकीकरण के लिए वास्तविक Google खाते की आवश्यकता है। कैलेंडर जोड़ने के लिए Google से साइन इन करें।',
+    guestCalendarBtn: 'कैलेंडर कनेक्ट करने के लिए साइन इन करें',
   },
 
   ta: {
@@ -1714,7 +1815,7 @@ export const translations: Record<Language, TranslationDictionary> = {
     insights: 'நுண்ணறிவு',
     copyInsights: 'நுண்ணறிவை நகலெடு',
     copied: 'நகலெடுக்கப்பட்டது',
-    saveStatusSaved: 'பெட்டகத்தில் சேமிக்கப்பட்டது',
+    saveStatusSaved: '',
     saveStatusSaving: 'சேமிக்கப்படுகிறது...',
     saveStatusError: 'சேமிப்பதில் பிழை',
     untitledReflection: 'தலைப்பில்லாத சிந்தனை',
@@ -1835,5 +1936,25 @@ export const translations: Record<Language, TranslationDictionary> = {
     tourStep5Desc: 'முக்கிய உணர்தல்கள், தொகுப்புகள் மற்றும் காலப்போக்கில் உங்கள் மனநிலை மாற்றங்களைக் கண்காணிக்கவும்.',
     tourStep6Title: 'தீம்கள், காப்புப்பிரதி & பாதுகாப்பு பூட்டு',
     tourStep6Desc: '5 தீம்கள், தொடர் நாள் பதிவு, ஏற்றுமதி/இறக்குமதி மற்றும் 4-இலக்க PIN பூட்டு மூலம் உங்கள் நாட்குறிப்பைப் பாதுகாக்கவும்.',
+
+    sample: 'மாதிரி',
+    sampleReflection: 'மாதிரி சிந்தனை',
+    whatYouCanDo: 'Inkwell இல் நீங்கள் செய்யக்கூடியவை',
+    sampleEntryTip: 'இது நீங்கள் அறிந்துகொள்ள உதவும் மாதிரி சிந்தனைப் பதிவு. நீங்கள் இதைத் தொகுக்கலாம், கருவிகளைப் பரிசோதிக்கலாம், அல்லது சொந்தப் பதிவு எழுதும்போது நீக்கலாம்.',
+
+    // Guest Mode & Anonymous Auth
+    continueAsGuest: 'விருந்தினராக தொடரவும்',
+    continueAsGuestSubtitle: 'Google கணக்கு இல்லாமல் உடனடியாகப் பயன்படுத்துங்கள். தரவு இந்த உலாவியில் மட்டுமே இருக்கும்.',
+    guestMode: 'விருந்தினர் முறை',
+    guestModeBadge: 'விருந்தினர்',
+    guestModeNotice: 'விருந்தினர் முறை: பதிவுகள் இந்த உலாவியில் மட்டுமே சேமிக்கப்படும். நிரந்தரமாகப் பாதுகாக்க உங்கள் Google கணக்கை இணைக்கவும்.',
+    guestModeDisclaimer: 'உள்ளூர் சாதனம் மட்டும். குக்கீகளை நீக்கினால் இந்த அமர்வு மீட்டமைக்கப்படும்.',
+    guestModeWarning: 'விருந்தினர் தரவு பிற சாதனங்களில் ஒத்திசைக்கப்படாது.',
+    linkGoogleAccount: 'Google கணக்கை இணைக்கவும்',
+    saveDataPermanently: 'நிரந்தரமாகச் சேமிக்கவும்',
+    linkingAccount: 'கணக்கு இணைக்கப்படுகிறது...',
+    accountLinkedSuccess: 'Google கணக்கு வெற்றிகரமாக இணைக்கப்பட்டது! உங்கள் சிந்தனைகள் இப்போது நிரந்தரமாகப் பாதுகாக்கப்படுகின்றன.',
+    guestCalendarNotice: 'Google Calendar ஒருங்கிணைப்புக்கு உண்மையான Google கணக்கு தேவைப்படுகிறது. உங்கள் காலெண்டரை இணைக்க Google மூலம் உள்நுழைக.',
+    guestCalendarBtn: 'காலெண்டரை இணைக்க உள்நுழைக',
   },
 };

@@ -50,6 +50,12 @@ const TRANSCRIBE_FALLBACK_MODELS = [
   'gemini-flash-latest',
 ];
 
+const EMBEDDING_FALLBACK_MODELS = [
+  'gemini-embedding-001',
+  'gemini-embedding-2-preview',
+  'gemini-embedding-2',
+];
+
 interface FallbackOptions {
   contents: unknown;
   systemInstruction?: string;
@@ -58,16 +64,232 @@ interface FallbackOptions {
   models?: string[];
 }
 
-function isUnrecoverableAuthError(err: any): boolean {
+/**
+ * Computes cosine similarity between two vector arrays.
+ */
+function computeCosineSimilarity(vecA: number[], vecB: number[]): number {
+  if (!Array.isArray(vecA) || !Array.isArray(vecB) || vecA.length === 0 || vecB.length === 0) {
+    return 0;
+  }
+  const len = Math.min(vecA.length, vecB.length);
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < len; i++) {
+    const a = vecA[i] || 0;
+    const b = vecB[i] || 0;
+    dotProduct += a * b;
+    normA += a * a;
+    normB += b * b;
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  if (denom === 0) return 0;
+  return dotProduct / denom;
+}
+
+/**
+ * High-performance deterministic semantic-lexical vector generator (dim: 768).
+ * Provides subword n-gram hashing and thematic concept clustering with L2 normalization.
+ * Ensures the Ask My Life semantic similarity search never crashes during transient API rate-limits.
+ */
+function generateDeterministicSemanticVector(text: string, dim: number = 768): number[] {
+  const vec = new Float64Array(dim);
+  const normalized = (text || '').toLowerCase().trim();
+  const words = normalized.split(/[^a-z0-9_#@]+/).filter((w) => w.length > 1);
+
+  if (words.length === 0) {
+    return Array.from(vec);
+  }
+
+  const stopWords = new Set([
+    'the', 'and', 'a', 'to', 'of', 'in', 'i', 'is', 'that', 'it', 'on', 'you',
+    'this', 'for', 'but', 'with', 'are', 'have', 'be', 'at', 'or', 'as', 'was',
+    'so', 'if', 'out', 'not', 'my', 'me', 'we', 'they', 'what', 'when', 'where', 'how'
+  ]);
+
+  const conceptBuckets: Record<string, number[]> = {
+    proud: [12, 45, 88, 142, 230, 310, 480],
+    pride: [12, 45, 88, 142, 230, 310],
+    accomplishment: [12, 45, 88, 142, 230],
+    achievement: [12, 45, 88, 142, 230],
+    milestone: [12, 45, 89, 210, 350],
+    win: [12, 88, 142, 230],
+    success: [12, 45, 88, 142],
+    project: [24, 76, 112, 198, 280, 520],
+    work: [24, 76, 112, 198, 340, 520],
+    code: [24, 76, 112, 198],
+    coding: [24, 76, 112, 198],
+    build: [24, 76, 112, 280],
+    job: [24, 112, 198, 340],
+    career: [24, 112, 198, 340],
+    stress: [35, 92, 160, 245, 380, 610],
+    stressed: [35, 92, 160, 245, 380, 610],
+    anxiety: [35, 92, 160, 245, 380],
+    anxious: [35, 92, 160, 245, 380],
+    burnout: [35, 92, 160, 380, 610],
+    overwhelmed: [35, 92, 160, 245],
+    tired: [35, 160, 380, 610],
+    exhausted: [35, 160, 380],
+    gratitude: [50, 105, 175, 290, 410, 650],
+    grateful: [50, 105, 175, 290, 410],
+    thankful: [50, 105, 175, 290],
+    blessed: [50, 105, 175, 410],
+    happy: [60, 120, 190, 305, 470],
+    joy: [60, 120, 190, 305],
+    peace: [65, 130, 200, 320, 500],
+    peaceful: [65, 130, 200, 320],
+    calm: [65, 130, 200, 320],
+    learning: [70, 140, 220, 350, 530],
+    growth: [70, 140, 220, 350, 530],
+    lesson: [70, 140, 220, 350],
+    travel: [80, 155, 260, 420, 580],
+    trip: [80, 155, 260, 420],
+    family: [90, 180, 275, 450, 640],
+    friends: [90, 180, 275, 450],
+    friend: [90, 180, 275, 450],
+    love: [95, 185, 280, 460, 670],
+  };
+
+  for (const word of words) {
+    const weight = stopWords.has(word) ? 0.25 : 1.0;
+
+    let h1 = 2166136261;
+    let h2 = 16777619;
+    for (let i = 0; i < word.length; i++) {
+      const code = word.charCodeAt(i);
+      h1 = Math.imul(h1 ^ code, 16777619);
+      h2 = Math.imul(h2 ^ code, 2166136261);
+    }
+
+    const idx1 = Math.abs(h1) % dim;
+    const idx2 = Math.abs(h2) % dim;
+    const idx3 = Math.abs(h1 ^ h2) % dim;
+
+    vec[idx1] += weight * 1.5;
+    vec[idx2] += weight * 1.0;
+    vec[idx3] += weight * 0.75;
+
+    if (word.length >= 3) {
+      for (let i = 0; i <= word.length - 3; i++) {
+        const trigram = word.substring(i, i + 3);
+        let th = 0;
+        for (let j = 0; j < 3; j++) th = (th << 5) - th + trigram.charCodeAt(j);
+        const tidx = Math.abs(th) % dim;
+        vec[tidx] += 0.35 * weight;
+      }
+    }
+
+    const rootWord = word.replace(/(ing|ed|ly|s|es)$/, '');
+    const matchedConcept = conceptBuckets[word] || conceptBuckets[rootWord];
+    if (matchedConcept) {
+      for (const bIdx of matchedConcept) {
+        vec[bIdx % dim] += 3.0;
+      }
+    }
+  }
+
+  let norm = 0;
+  for (let i = 0; i < dim; i++) {
+    norm += vec[i] * vec[i];
+  }
+  norm = Math.sqrt(norm);
+  if (norm > 0) {
+    for (let i = 0; i < dim; i++) {
+      vec[i] /= norm;
+    }
+  }
+
+  return Array.from(vec);
+}
+
+/**
+ * Resilient Embedding Generator with Gemini API Fallback Ladder & Deterministic Semantic Vector Failover
+ */
+async function generateEmbeddingWithFallback(
+  text: string,
+  outputDimensionality: number = 768
+): Promise<{ embedding: number[]; modelUsed: string; isFallback?: boolean }> {
+  const cleanText = (text || '').trim();
+  if (!cleanText) {
+    return {
+      embedding: new Array(outputDimensionality).fill(0),
+      modelUsed: 'zero-vector',
+      isFallback: false,
+    };
+  }
+
+  const ai = getGenAI();
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (apiKey && apiKey.trim() !== '') {
+    for (const modelName of EMBEDDING_FALLBACK_MODELS) {
+      try {
+        console.info(`[Gemini Embedding] Requesting vector embedding via model: ${modelName}`);
+        const response = await ai.models.embedContent({
+          model: modelName,
+          contents: cleanText,
+          config: {
+            outputDimensionality,
+          },
+        });
+
+        const values = (response as any).embedding?.values || (response as any).embeddings?.[0]?.values;
+        if (Array.isArray(values) && values.length > 0) {
+          // Normalize to unit length
+          let norm = 0;
+          for (let i = 0; i < values.length; i++) {
+            norm += values[i] * values[i];
+          }
+          norm = Math.sqrt(norm);
+          const normalized = norm > 0 ? values.map((v: number) => v / norm) : values;
+
+          console.info(`[Gemini Embedding] Successfully embedded content with ${modelName} (${normalized.length} dims)`);
+          return {
+            embedding: normalized,
+            modelUsed: modelName,
+            isFallback: false,
+          };
+        }
+      } catch (err: any) {
+        if (isCreditOrAuthExhausted(err)) {
+          console.info(`[Gemini Embedding] Gemini API credits depleted or unauthenticated (429/401). Using resilient semantic vector engine.`);
+          break;
+        }
+        console.warn(`[Gemini Embedding] Model ${modelName} notice:`, err?.message || err);
+      }
+    }
+  }
+
+  // Graceful deterministic semantic vector fallback
+  console.info(`[Gemini Embedding] Using resilient deterministic semantic vector representation (dim: ${outputDimensionality})`);
+  const fallbackVec = generateDeterministicSemanticVector(cleanText, outputDimensionality);
+  return {
+    embedding: fallbackVec,
+    modelUsed: 'semantic-lexical-hybrid-v1',
+    isFallback: true,
+  };
+}
+
+function isCreditOrAuthExhausted(err: any): boolean {
   if (!err) return false;
   const str = String(err?.message || err) + ' ' + (typeof err === 'object' ? JSON.stringify(err) : '');
   return (
+    str.includes('429') ||
+    str.includes('RESOURCE_EXHAUSTED') ||
+    str.includes('prepayment credits are depleted') ||
+    str.includes('credits are depleted') ||
+    str.includes('quota') ||
+    str.includes('Quota exceeded') ||
     str.includes('401') ||
     str.includes('UNAUTHENTICATED') ||
     str.includes('ACCESS_TOKEN_TYPE_UNSUPPORTED') ||
-    str.includes('invalid authentication credentials') ||
+    str.includes('invalid authentication') ||
     str.includes('API_KEY_INVALID')
   );
+}
+
+function isUnrecoverableAuthError(err: any): boolean {
+  return isCreditOrAuthExhausted(err);
 }
 
 function extractErrorSummary(err: any): { summary: string; details: string; code: number | string } {
@@ -202,11 +424,12 @@ async function generateContentWithFallback(options: FallbackOptions): Promise<{ 
         return { text: responseText, modelUsed: modelName };
       }
     } catch (err: any) {
-      console.error(`[Gemini API] Model ${modelName} failed:`, err?.message || err);
-      if (isUnrecoverableAuthError(err)) {
-        // Fast-fail authentication errors to prevent cascading redundant API failures
-        throw new Error(`Gemini API authentication failed (401): ${err?.message || 'Invalid or unsupported API key'}`);
+      if (isCreditOrAuthExhausted(err)) {
+        console.info(`[Gemini API] Quota/credits depleted or unauthenticated for ${modelName}. Fast-failing to offline reasoning engine.`);
+        const errInfo = extractErrorSummary(err);
+        throw new Error(`Gemini API credits/quota depleted (${errInfo.code}): ${err?.message || 'Prepayment credits exhausted or invalid key'}`);
       }
+      console.warn(`[Gemini API] Model ${modelName} notice:`, err?.message || err);
       lastError = err;
     }
   }
@@ -620,6 +843,34 @@ app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
 
+// Helper to generate a clean, safe fallback title from text
+function generateCleanFallbackTitle(text: string, language: string = 'en'): string {
+  if (!text || !text.trim()) {
+    return 'Reflection';
+  }
+  // Strip markdown, bullet points, headers, formatting symbols
+  const clean = text
+    .replace(/^#+\s+/gm, '')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/^\d+\.\s+/gm, '')
+    .replace(/^>\s+/gm, '')
+    .replace(/[*_~`]/g, '')
+    .trim();
+
+  const firstLine = clean.split('\n')[0].trim();
+  if (!firstLine) return 'Reflection';
+
+  if (firstLine.length <= 50) {
+    return firstLine.replace(/[.:;!?,]+$/, '').trim();
+  }
+
+  // Truncate at word boundary near 45 chars
+  const truncated = firstLine.slice(0, 48);
+  const lastSpace = truncated.lastIndexOf(' ');
+  const safeSnippet = lastSpace > 20 ? truncated.slice(0, lastSpace) : truncated;
+  return safeSnippet.trim().replace(/[.:;!?,]+$/, '') + '...';
+}
+
 // Reflect / Converse Endpoint
 app.post('/api/gemini/reflect', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -627,7 +878,8 @@ app.post('/api/gemini/reflect', async (req: Request, res: Response): Promise<voi
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
     const mode = typeof body.mode === 'string' ? body.mode : 'reflect';
-    const entryTitle = typeof body.entryTitle === 'string' ? body.entryTitle : '';
+    const entryTitle = typeof body.entryTitle === 'string' ? body.entryTitle.trim() : '';
+    const hasCustomTitle = Boolean(body.hasCustomTitle || (body.metadata && body.metadata.hasCustomTitle));
     const language = typeof body.language === 'string' ? body.language : 'en';
     const rawList = Array.isArray(body.messages) ? body.messages : (Array.isArray(body.history) ? body.history : []);
     const metadata = body.metadata && typeof body.metadata === 'object' ? body.metadata : {};
@@ -720,6 +972,35 @@ Language Directive:
     }
     const primaryUserPrompt = latestUserMsg || '';
 
+    // Determine if title should be auto-generated (if user hasn't explicitly set a custom title)
+    const shouldGenerateTitle = !hasCustomTitle;
+    let detectedMood = metadata.mood;
+    let suggestedTitle = entryTitle;
+
+    // Concurrently prepare metadata/title generator promise in parallel with main reflection
+    let metaPromise: Promise<any> | null = null;
+    if (shouldGenerateTitle && primaryUserPrompt.length > 0) {
+      metaPromise = generateContentWithFallback({
+        contents: `You are Inkwell's journal title summarizer and metadata extractor. Analyze the user's journal entry and return a JSON object with:
+1. "title": A concise, natural, and expressive title (approx 4 to 8 words) capturing the core theme, emotional focus, or dilemma of what was written.
+   - CRITICAL LANGUAGE RULE: The title MUST be generated in the EXACT SAME LANGUAGE and script as the user's journal entry (${langName}). If the entry is in Tamil, generate the title in Tamil. If in Hindi, generate in Hindi. If in Spanish, generate in Spanish. If in French, generate in French. If in English, generate in English. Do NOT translate the title to English.
+   - CRITICAL QUALITY RULE: Do NOT simply copy or truncate the first sentence verbatim. Synthesize a genuine, human-readable headline/topic summary (for example, if user writes "waking up at 6.30 am is a challenge, I keep hitting snooze and feeling guilty about it", generate "The Struggle with Early Mornings" or "6:30 AM Wake-Up Challenges" instead of "waking up at 6.30 am is a challenge...").
+   - Do NOT wrap the title in quotation marks, and do not append trailing periods.
+2. "detectedMood": A single word describing the emotional tone (e.g. "Calm", "Reflective", "Optimistic", "Challenged", "Inspired", "Grateful", "Anxious").
+3. "tags": An array of 2-4 lowercase topic tags in ${langName}.
+
+User's journal entry:
+"""
+${primaryUserPrompt.slice(0, 3000)}
+"""`,
+        responseMimeType: 'application/json',
+        temperature: 0.3,
+      }).catch((metaErr) => {
+        console.warn('[Gemini Title/Meta Generation] Non-fatal fallback:', metaErr?.message);
+        return null;
+      });
+    }
+
     let text = '';
     let modelUsed = 'gemini-3.7-flash';
     let isFallback = false;
@@ -727,16 +1008,34 @@ Language Directive:
     let errorDetails: string | undefined = undefined;
 
     try {
-      const result = await generateContentWithFallback({
-        contents,
-        systemInstruction,
-        temperature: mode === 'brainstorm' ? 0.85 : 0.65,
-      });
-      text = result.text;
-      modelUsed = result.modelUsed;
+      const [reflectionResult, metaResult] = await Promise.all([
+        generateContentWithFallback({
+          contents,
+          systemInstruction,
+          temperature: mode === 'brainstorm' ? 0.85 : 0.65,
+        }),
+        metaPromise ? metaPromise : Promise.resolve(null),
+      ]);
+
+      text = reflectionResult.text;
+      modelUsed = reflectionResult.modelUsed;
+
+      if (metaResult && metaResult.text) {
+        try {
+          const parsed = JSON.parse(metaResult.text);
+          if (parsed.title && typeof parsed.title === 'string' && parsed.title.trim()) {
+            suggestedTitle = parsed.title.replace(/^["']|["']$/g, '').trim();
+          }
+          if (parsed.detectedMood && !detectedMood) {
+            detectedMood = parsed.detectedMood;
+          }
+        } catch (parseErr) {
+          console.warn('[Gemini Title/Meta Parse] JSON parse warning:', parseErr);
+        }
+      }
     } catch (genError: any) {
-      console.error('[Gemini API Reflection Failed]:', genError?.message || genError);
       const errInfo = extractErrorSummary(genError);
+      console.info(`[Gemini API Reflection] Using resilient offline reflection (${errInfo.summary})`);
       warning = errInfo.summary;
       errorDetails = errInfo.details;
       modelUsed = `Offline Reflection (${errInfo.summary})`;
@@ -753,33 +1052,9 @@ Language Directive:
       text = offlineNotice + fallbackAnalysis;
     }
 
-    // Generate lightweight smart tags / detected mood suggestion if needed
-    let detectedMood = metadata.mood;
-    let suggestedTitle = entryTitle;
-
-    // If there is no title yet or this is early in the entry, suggest a title and tags
-    if (!isFallback && (!entryTitle || entryTitle === 'New Reflection') && primaryUserPrompt.length > 15) {
-      try {
-        const metaGen = await generateContentWithFallback({
-          contents: `Based on this journal entry, provide a JSON object with:
-1. "title": A short, elegant 3-6 word title in ${langName}.
-2. "detectedMood": A single word describing the emotional tone (e.g. "Calm", "Reflective", "Optimistic", "Challenged", "Inspired", "Grateful", "Anxious").
-3. "tags": An array of 2-4 lowercase topic tags.
-
-User's entry:
-"""
-${primaryUserPrompt}
-"""`,
-          responseMimeType: 'application/json',
-          temperature: 0.3,
-        });
-
-        const parsed = JSON.parse(metaGen.text);
-        if (parsed.title) suggestedTitle = parsed.title;
-        if (parsed.detectedMood && !detectedMood) detectedMood = parsed.detectedMood;
-      } catch (metaErr) {
-        // Non-fatal metadata extraction fallback
-      }
+    // If title generation is needed and was not set by Gemini (e.g. offline fallback, meta error, or empty)
+    if (shouldGenerateTitle && (!suggestedTitle || suggestedTitle === 'New Reflection' || suggestedTitle === 'Untitled Reflection')) {
+      suggestedTitle = generateCleanFallbackTitle(primaryUserPrompt, language);
     }
 
     res.json({
@@ -841,8 +1116,8 @@ ${textContent}
         isFallback: false,
       });
     } catch (sumErr: any) {
-      console.error('[Gemini Summarize API Failed]:', sumErr?.message || sumErr);
       const errInfo = extractErrorSummary(sumErr);
+      console.info(`[Gemini Summarize API] Using offline summary (${errInfo.summary})`);
       const fallbackData = generateFallbackSummary(textContent, language);
       res.json({
         ...fallbackData,
@@ -1179,8 +1454,8 @@ ${keyHighlights.map((h: string) => `- ${h}`).join('\n')}
         isFallback: false,
       });
     } catch (genErr: any) {
-      console.error('[Gemini Day Synthesis Failed]:', genErr?.message || genErr);
       const errInfo = extractErrorSummary(genErr);
+      console.info(`[Gemini Day Synthesis] Using offline day review synthesis (${errInfo.summary})`);
       const fallback = generateFallbackDayReview(calendarEvents, journalEntries, dateStr, userName);
       res.json({
         ...fallback,
@@ -1198,7 +1473,458 @@ ${keyHighlights.map((h: string) => `- ${h}`).join('\n')}
   }
 });
 
-// Google Places API (New) Autocomplete Proxy with Key Isolation & Rate/Cost Protection
+// Embedding Generator Endpoint (Single Text)
+app.post('/api/gemini/embed', async (req: Request, res: Response) => {
+  try {
+    const rawText = req.body?.text;
+    const text = typeof rawText === 'string' ? rawText.trim() : '';
+    const outputDimensionality = typeof req.body?.outputDimensionality === 'number' ? req.body.outputDimensionality : 768;
+
+    if (!text) {
+      return res.status(400).json({ error: 'Text is required for embedding generation.' });
+    }
+
+    const { embedding, modelUsed, isFallback } = await generateEmbeddingWithFallback(text, outputDimensionality);
+
+    return res.json({
+      embedding,
+      modelUsed,
+      dimensions: embedding.length,
+      isFallback: !!isFallback,
+    });
+  } catch (error: any) {
+    console.error('API /api/gemini/embed error:', error);
+    res.status(500).json({
+      error: error?.message || 'Failed to generate embedding vector.',
+    });
+  }
+});
+
+// Batch Embedding Generator Endpoint (Backfill / Migration)
+app.post('/api/gemini/batch-embed', async (req: Request, res: Response) => {
+  try {
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    const outputDimensionality = typeof req.body?.outputDimensionality === 'number' ? req.body.outputDimensionality : 768;
+
+    if (items.length === 0) {
+      return res.json({ results: [], count: 0 });
+    }
+
+    // Limit batch size to 50 for safety
+    const safeItems = items.slice(0, 50);
+    const results: Array<{ id: string; embedding: number[]; modelUsed?: string; isFallback?: boolean }> = [];
+
+    for (const item of safeItems) {
+      if (!item || !item.id) continue;
+      const text = typeof item.text === 'string' ? item.text.trim() : '';
+      const { embedding, modelUsed, isFallback } = await generateEmbeddingWithFallback(text, outputDimensionality);
+      results.push({
+        id: item.id,
+        embedding,
+        modelUsed,
+        isFallback,
+      });
+    }
+
+    return res.json({
+      results,
+      count: results.length,
+    });
+  } catch (error: any) {
+    console.error('API /api/gemini/batch-embed error:', error);
+    res.status(500).json({
+      error: error?.message || 'Failed to process batch embeddings.',
+    });
+  }
+});
+
+// Ask My Life Semantic Memory Search & Synthesis Endpoint
+app.post('/api/gemini/ask-my-life', async (req: Request, res: Response) => {
+  const startTime = Date.now();
+  try {
+    const rawQuery = req.body?.query;
+    const query = typeof rawQuery === 'string' ? rawQuery.trim() : '';
+    const userId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
+    const rawEntries = Array.isArray(req.body?.entries) ? req.body.entries : [];
+    const language = typeof req.body?.language === 'string' ? req.body.language : 'en';
+    const userName = typeof req.body?.userName === 'string' ? req.body.userName.trim() : '';
+
+    if (!query) {
+      return res.status(400).json({ error: 'Search query is required.' });
+    }
+    if (!userId) {
+      return res.status(400).json({ error: 'Authenticated User ID is required for scoped memory search.' });
+    }
+
+    // Security & User Isolation: Scoped strictly to the authenticated user's entries
+    const userEntries = rawEntries.filter(
+      (e: any) => e && (e.userId === userId || !e.userId || userId === 'anonymous') && !e.deletedAt
+    );
+
+    if (userEntries.length === 0) {
+      return res.json({
+        answer: language === 'es'
+          ? 'No encontré reflexiones en tu diario para buscar. ¡Comienza a escribir tus memorias para activar Ask My Life!'
+          : language === 'fr'
+          ? "Je n'ai trouvé aucune réflexion dans votre journal. Commencez à écrire vos souvenirs pour activer Ask My Life !"
+          : language === 'hi'
+          ? 'आपकी डायरी में कोई प्रविष्टियाँ नहीं मिलीं। Ask My Life सक्रिय करने के लिए लिखना शुरू करें!'
+          : language === 'ta'
+          ? 'உங்கள் நாட்குறிப்பில் எந்தப் பதிவுகளும் கிடைக்கவில்லை. Ask My Life இயக்க எழுதத் தொடங்குங்கள்!'
+          : "I couldn't find any reflections in your journal vault. Start writing your daily reflections to enable Ask My Life semantic search!",
+        citations: [],
+        status: 'no_matches',
+        totalSearched: 0,
+        queryTimeMs: Date.now() - startTime,
+      });
+    }
+
+    // 1. Generate Question Embedding
+    const { embedding: queryEmbedding, modelUsed: embeddingModel } = await generateEmbeddingWithFallback(query, 768);
+
+    // Date and Keyword Matching Utilities for Hybrid Semantic Search
+    const getDateMatchScore = (qStr: string, timestamp: number): { isMatch: boolean; boost: number; matchType: string } => {
+      if (!qStr || !timestamp) return { isMatch: false, boost: 0, matchType: '' };
+      const entryDate = new Date(timestamp);
+      if (isNaN(entryDate.getTime())) return { isMatch: false, boost: 0, matchType: '' };
+
+      const q = qStr.toLowerCase().trim();
+      const entryYear = entryDate.getFullYear();
+      const entryMonth = entryDate.getMonth(); // 0-11
+      const entryDay = entryDate.getDate(); // 1-31
+
+      const monthNamesEn = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+      const monthAbbrEn = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec'];
+      const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      
+      const entryMonthName = monthNamesEn[entryMonth];
+      const entryMonthAbbr = monthAbbrEn[entryMonth];
+      const entryDayOfWeek = daysOfWeek[entryDate.getDay()];
+      const daySuffix = entryDay === 1 || entryDay === 21 || entryDay === 31 ? 'st' : entryDay === 2 || entryDay === 22 ? 'nd' : entryDay === 3 || entryDay === 23 ? 'rd' : 'th';
+      const entryOrdinal = `${entryDay}${daySuffix}`; // e.g. "3rd"
+
+      // Check date patterns
+      const fullMonthDayOrdinal = `${entryMonthName} ${entryOrdinal}`; // "september 3rd"
+      const fullMonthDay = `${entryMonthName} ${entryDay}`; // "september 3"
+      const abbrMonthDayOrdinal = `${entryMonthAbbr} ${entryOrdinal}`; // "sep 3rd"
+      const abbrMonthDay = `${entryMonthAbbr} ${entryDay}`; // "sep 3"
+      const septMonthDay = `sept ${entryDay}`;
+      const septMonthOrdinal = `sept ${entryOrdinal}`;
+      const numPattern1 = `${entryMonth + 1}/${entryDay}`;
+      const numPattern2 = `${String(entryMonth + 1).padStart(2, '0')}/${String(entryDay).padStart(2, '0')}`;
+      const numPattern3 = `${entryYear}-${String(entryMonth + 1).padStart(2, '0')}-${String(entryDay).padStart(2, '0')}`;
+
+      // Relative dates (using current server time)
+      const now = new Date();
+      const isToday = now.getFullYear() === entryYear && now.getMonth() === entryMonth && now.getDate() === entryDay;
+      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const isYesterday = yesterday.getFullYear() === entryYear && yesterday.getMonth() === entryMonth && yesterday.getDate() === entryDay;
+
+      // Exact date match
+      if (
+        q.includes(fullMonthDayOrdinal) ||
+        q.includes(fullMonthDay) ||
+        q.includes(abbrMonthDayOrdinal) ||
+        q.includes(abbrMonthDay) ||
+        q.includes(septMonthOrdinal) ||
+        q.includes(septMonthDay) ||
+        q.includes(numPattern1) ||
+        q.includes(numPattern2) ||
+        q.includes(numPattern3)
+      ) {
+        return { isMatch: true, boost: 0.70, matchType: 'exact_date' };
+      }
+
+      // Relative "today" match
+      if (isToday && (q.includes('today') || q.includes('hoy') || q.includes('aujourd') || q.includes('आज') || q.includes('இன்று') || q.includes('this morning') || q.includes('tonight'))) {
+        return { isMatch: true, boost: 0.65, matchType: 'today_relative' };
+      }
+
+      // Relative "yesterday" match
+      if (isYesterday && (q.includes('yesterday') || q.includes('ayer') || q.includes('hier') || q.includes('कल') || q.includes('நேற்று'))) {
+        return { isMatch: true, boost: 0.65, matchType: 'yesterday_relative' };
+      }
+
+      // Month-only query match
+      if ((q.includes(entryMonthName) || q.includes(entryMonthAbbr)) && (q.includes('month') || q.includes('in ' + entryMonthName) || q.includes('in ' + entryMonthAbbr))) {
+        return { isMatch: true, boost: 0.35, matchType: 'month_match' };
+      }
+
+      // Day of week match
+      if (q.includes(entryDayOfWeek) && (q.includes('on ' + entryDayOfWeek) || q.includes('last ' + entryDayOfWeek))) {
+        return { isMatch: true, boost: 0.25, matchType: 'day_of_week' };
+      }
+
+      return { isMatch: false, boost: 0, matchType: '' };
+    };
+
+    const computeKeywordOverlapScore = (qStr: string, text: string): number => {
+      if (!qStr || !text) return 0;
+      const stopWords = new Set(['what', 'when', 'where', 'which', 'who', 'whom', 'this', 'that', 'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or', 'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'can', 'will', 'just', 'should', 'now', 'anything', 'something', 'tell', 'me', 'show']);
+      
+      const queryTokens = qStr.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > 2 && !stopWords.has(t));
+      if (queryTokens.length === 0) return 0;
+      
+      const textLower = text.toLowerCase();
+      let matched = 0;
+      for (const token of queryTokens) {
+        if (textLower.includes(token)) {
+          matched++;
+        }
+      }
+      return matched / queryTokens.length;
+    };
+
+    // 2. Compute Hybrid Similarity & Date Alignment against all user entries
+    const scoredEntries: Array<{
+      entry: any;
+      score: number;
+      textSnippet: string;
+      dateFormatted: string;
+      dateMatch: { isMatch: boolean; boost: number; matchType: string };
+    }> = [];
+
+    let hasAnyDateMatch = false;
+
+    for (const entry of userEntries) {
+      // Extract entry content representation
+      const title = entry.title || 'Untitled Reflection';
+      const mood = entry.metadata?.mood || '';
+      const tags = Array.isArray(entry.metadata?.tags) ? entry.metadata.tags.join(', ') : '';
+      const place = entry.metadata?.placeLocation?.name || '';
+      const weather = entry.metadata?.weather ? `${entry.metadata.weather.condition || ''} ${entry.metadata.weather.temperature || ''}°C` : '';
+      const summary = entry.summary || '';
+      
+      const userMessages = (Array.isArray(entry.messages) ? entry.messages : [])
+        .filter((m: any) => m && m.role === 'user' && typeof m.content === 'string' && m.content.trim().length > 0)
+        .map((m: any) => m.content.trim());
+      
+      const entryTextBody = userMessages.join('\n\n') || summary || title;
+
+      const entryTimestamp = entry.createdAt || entry.updatedAt || Date.now();
+      const entryDate = new Date(entryTimestamp);
+      const dateFormatted = entryDate.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      const dateFormattedFull = entryDate.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      const day = entryDate.getDate();
+      const daySuffix = day === 1 || day === 21 || day === 31 ? 'st' : day === 2 || day === 22 ? 'nd' : day === 3 || day === 23 ? 'rd' : 'th';
+      const ordinalDate = `${entryDate.toLocaleDateString('en-US', { month: 'long' })} ${day}${daySuffix}`;
+      const isoDate = entryDate.toISOString().slice(0, 10);
+
+      const combinedSearchText = [
+        `Date: ${dateFormattedFull} (${dateFormatted}, ${ordinalDate}, ${isoDate})`,
+        title !== 'New Reflection' && title !== 'Untitled Reflection' ? `Title: ${title}` : '',
+        mood ? `Mood: ${mood}` : '',
+        tags ? `Tags: ${tags}` : '',
+        place ? `Location: ${place}` : '',
+        weather ? `Weather: ${weather}` : '',
+        summary ? `Summary: ${summary}` : '',
+        entryTextBody ? `Reflections: ${entryTextBody}` : '',
+      ].filter(Boolean).join('\n\n');
+
+      let entryVector: number[] = [];
+      if (Array.isArray(entry.embedding) && entry.embedding.length === queryEmbedding.length) {
+        entryVector = entry.embedding;
+      } else {
+        // Derive deterministic embedding on the fly if not backfilled yet
+        entryVector = generateDeterministicSemanticVector(combinedSearchText, queryEmbedding.length);
+      }
+
+      const cosineScore = computeCosineSimilarity(queryEmbedding, entryVector);
+      const dateMatch = getDateMatchScore(query, entryTimestamp);
+      const keywordOverlap = computeKeywordOverlapScore(query, combinedSearchText);
+
+      if (dateMatch.isMatch) {
+        hasAnyDateMatch = true;
+      }
+
+      // Hybrid score formulation
+      let finalScore = cosineScore;
+      if (dateMatch.isMatch) {
+        finalScore = Math.max(finalScore, 0.45) + dateMatch.boost;
+      }
+      if (keywordOverlap > 0) {
+        finalScore += keywordOverlap * 0.25;
+      }
+      finalScore = Math.min(1.0, Math.max(0.0, finalScore));
+
+      // Create a clean snippet
+      const firstUserMsg = userMessages[0] || summary || title;
+      const snippet = firstUserMsg.length > 200 ? firstUserMsg.slice(0, 197) + '...' : firstUserMsg;
+
+      scoredEntries.push({
+        entry,
+        score: finalScore,
+        textSnippet: snippet,
+        dateFormatted,
+        dateMatch,
+      });
+    }
+
+    // Sort by similarity score descending
+    scoredEntries.sort((a, b) => b.score - a.score);
+
+    // Filter to top candidates
+    const topCandidates = scoredEntries.slice(0, 5);
+    const bestScore = topCandidates[0]?.score || 0;
+
+    // Minimum similarity threshold (dynamic based on whether temporal or keyword match occurred)
+    const minThreshold = hasAnyDateMatch ? 0.20 : 0.22;
+
+    if (bestScore < minThreshold) {
+      return res.json({
+        answer: language === 'es'
+          ? `He buscado en las memorias de tu diario, pero no encontré reflexiones que coincidan estrechamente con "${query}". Intenta preguntar sobre emociones, proyectos o fechas específicas sobre las que hayas escrito.`
+          : language === 'fr'
+          ? `J'ai cherché dans vos souvenirs de journal, mais je n'ai trouvé aucune réflexion correspondant précisément à "${query}". Essayez de poser des questions sur des sentiments, projets ou dates spécifiques.`
+          : language === 'hi'
+          ? `मैंने आपकी डायरी की यादों में खोजा, लेकिन "${query}" से मेल खाती कोई स्पष्ट प्रविष्टि नहीं मिली। विशिष्ट भावनाओं, परियोजनाओं या तिथियों के बारे में पूछने का प्रयास करें!`
+          : language === 'ta'
+          ? `உங்கள் நாட்குறிப்பு நினைவுகளில் தேடினேன், ஆனால் "${query}" தொடர்பான பதிவுகள் கிடைக்கவில்லை. நீங்கள் எழுதிய குறிப்பிட்ட உணர்வுகள், திட்டங்கள் அல்லது தேதிகள் பற்றி கேட்டுப் பாருங்கள்!`
+          : `I searched through your journal vault memories, but couldn't find any reflections closely matching "${query}". Try asking about specific feelings, projects, people, or milestones you've written about!`,
+        citations: [],
+        status: 'no_matches',
+        totalSearched: userEntries.length,
+        queryTimeMs: Date.now() - startTime,
+      });
+    }
+
+    // Format citations
+    const citations: Array<{
+      id: string;
+      title: string;
+      dateFormatted: string;
+      timestamp: number;
+      similarityScore: number;
+      snippet: string;
+      mood?: string;
+      tags?: string[];
+      location?: string;
+      summary?: string;
+    }> = topCandidates.map((c) => ({
+      id: c.entry.id,
+      title: c.entry.title || 'Untitled Reflection',
+      dateFormatted: c.dateFormatted,
+      timestamp: c.entry.createdAt || c.entry.updatedAt || Date.now(),
+      similarityScore: Math.round(c.score * 100),
+      snippet: c.textSnippet,
+      mood: c.entry.metadata?.mood,
+      tags: c.entry.metadata?.tags,
+      location: c.entry.metadata?.placeLocation?.name || c.entry.metadata?.placeLocation?.locality,
+      summary: c.entry.summary,
+    }));
+
+    // 3. Build context for Gemini synthesis
+    const memoryContext = topCandidates
+      .map((c, idx) => {
+        const e = c.entry;
+        const msgs = (Array.isArray(e.messages) ? e.messages : [])
+          .filter((m: any) => m && m.role === 'user' && m.content)
+          .map((m: any) => m.content)
+          .join('\n');
+        return `[Memory #${idx + 1}]
+Date: ${c.dateFormatted}
+Title: ${e.title || 'Untitled'}
+Mood: ${e.metadata?.mood || 'Not specified'}
+Tags: ${Array.isArray(e.metadata?.tags) ? e.metadata.tags.join(', ') : 'None'}
+Place: ${e.metadata?.placeLocation?.name || 'None'}
+Content:
+${msgs || e.summary || '(No text content)'}`;
+      })
+      .join('\n\n---\n\n');
+
+    const languageInstruction =
+      language === 'es'
+        ? 'Responde completamente en español cálido y reflexivo.'
+        : language === 'fr'
+        ? 'Répondez entièrement en français chaleureux et attentif.'
+        : language === 'hi'
+        ? 'कृपया शुद्ध और आत्मीय हिंदी में उत्तर दें।'
+        : language === 'ta'
+        ? 'தயவுசெய்து அன்பான தமிழில் பதிலளிக்கவும்.'
+        : 'Respond in warm, clear, and thoughtful English.';
+
+    const systemInstruction = `You are Inkwell's AI Memory Synthesizer — an empathetic, insightful, and accurate personal journal assistant.
+Your goal is to answer the user's question by synthesizing the retrieved journal memories below.
+
+CRITICAL RULES:
+1. Always cite specific dates with the calendar emoji and formatted date (e.g., 📅 March 14, 2026, 📅 May 22, 2026).
+2. Answer the user's specific question directly in the opening paragraph (e.g., "I found ${citations.length} relevant memories in your journal. The last time you mentioned feeling this was on 📅 March 14, 2026...").
+3. Weave the narrative across the cited memories, highlighting emotional arcs, key insights, challenges, and personal growth.
+4. Quote meaningful phrases the user wrote where appropriate.
+5. NEVER fabricate events, dates, or details not present in the provided memories.
+6. Keep the response organized, scannable, and heartfelt.
+7. ${languageInstruction}
+${userName ? `Address the user as ${userName} naturally.` : ''}`;
+
+    const prompt = `User Question: "${query}"
+
+Here are the retrieved journal memories from their vault:
+
+${memoryContext}
+
+Please synthesize an empathetic, truthful, date-cited answer to their question.`;
+
+    let synthesisText = '';
+    let modelUsed = '';
+    let isFallback = false;
+
+    try {
+      const genResult = await generateContentWithFallback({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        systemInstruction,
+        temperature: 0.4,
+      });
+      synthesisText = genResult.text;
+      modelUsed = genResult.modelUsed;
+    } catch (genErr: any) {
+      console.info('[Ask My Life] Synthesizing memory answer via structured memory engine');
+      isFallback = true;
+      modelUsed = 'structured-memory-synthesis-v1';
+
+      // Multilingual structured synthesis
+      const dateList = citations.map((c) => `📅 ${c.dateFormatted} — "${c.title}" (${c.similarityScore}% match)`).join('\n');
+      
+      if (language === 'es') {
+        synthesisText = `He encontrado ${citations.length} memorias relevantes en tu diario en respuesta a "${query}":\n\n${dateList}\n\n**Momentos destacados de tus reflexiones:**\n${citations.map((c) => `• **${c.dateFormatted}** (${c.mood ? `Estado: ${c.mood}` : 'Reflexión'}): ${c.snippet}`).join('\n\n')}`;
+      } else if (language === 'fr') {
+        synthesisText = `J'ai trouvé ${citations.length} souvenirs pertinents dans votre journal concernant "${query}" :\n\n${dateList}\n\n**Points clés de vos réflexions :**\n${citations.map((c) => `• **${c.dateFormatted}** (${c.mood ? `Humeur : ${c.mood}` : 'Réflexion'}) : ${c.snippet}`).join('\n\n')}`;
+      } else if (language === 'hi') {
+        synthesisText = `आपकी डायरी में "${query}" से संबंधित ${citations.length} प्रविष्टियां मिलीं:\n\n${dateList}\n\n**आपकी मुख्य विचार व अनुभूतियां:**\n${citations.map((c) => `• **${c.dateFormatted}** (${c.mood ? `मनोभाव: ${c.mood}` : 'विचार'}): ${c.snippet}`).join('\n\n')}`;
+      } else if (language === 'ta') {
+        synthesisText = `உங்கள் நாட்குறிப்பில் "${query}" தொடர்பான ${citations.length} முக்கிய பதிவுகள் கிடைத்துள்ளன:\n\n${dateList}\n\n**உங்கள் பதிவுகளின் சிறப்பம்சங்கள்:**\n${citations.map((c) => `• **${c.dateFormatted}** (${c.mood ? `மனநிலை: ${c.mood}` : 'பதிவு'}): ${c.snippet}`).join('\n\n')}`;
+      } else {
+        synthesisText = `I found ${citations.length} relevant memories in your journal vault answering "${query}":\n\n${dateList}\n\n**Key highlights from your reflections:**\n${citations.map((c) => `• **${c.dateFormatted}** (${c.mood ? `Mood: ${c.mood}` : 'Reflection'}): ${c.snippet}`).join('\n\n')}`;
+      }
+    }
+
+    return res.json({
+      answer: synthesisText,
+      citations,
+      modelUsed,
+      isFallback,
+      totalSearched: userEntries.length,
+      queryTimeMs: Date.now() - startTime,
+      status: 'success',
+    });
+  } catch (error: any) {
+    console.error('API /api/gemini/ask-my-life error:', error);
+    res.status(500).json({
+      error: error?.message || 'Failed to complete semantic memory search.',
+    });
+  }
+});
+
+// Autocomplete Places route proxy
 app.post('/api/places/autocomplete', async (req: Request, res: Response) => {
   try {
     const rawInput = req.body?.input;

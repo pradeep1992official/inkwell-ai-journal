@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "JournalEntry": {
+      "title": "JournalEntry",
+      "description": "A mindful reflection entry with multi-turn messages, mood, tags, weather metadata, and AI synthesis.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the journal entry."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the journal entry."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Synthesized AI summary or takeaway."
+        },
+        "isSample": {
+          "type": "boolean",
+          "description": "Flag indicating if this is an introductory sample entry."
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Unix timestamp in milliseconds when created."
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Unix timestamp in milliseconds when last updated."
+        },
+        "deletedAt": {
+          "type": "number",
+          "description": "Soft delete timestamp or null."
+        }
+      },
+      "required": ["id", "userId", "title", "createdAt", "updatedAt"]
+    },
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "User preferences including theme, font scale, language, auto-speak, and mindful settings.",
+      "type": "object",
+      "properties": {
+        "theme": {
+          "type": "string",
+          "description": "Visual theme identifier."
+        },
+        "language": {
+          "type": "string",
+          "description": "Preferred UI and AI language code."
+        },
+        "fontScale": {
+          "type": "string",
+          "description": "Font scaling preference."
+        },
+        "soundEnabled": {
+          "type": "boolean",
+          "description": "Whether ambient sound/audio feedback is enabled."
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}/entries/{entryId}": {
+      "schema": "JournalEntry",
+      "description": "Private journal entries authored by the user."
+    },
+    "/users/{userId}/preferences/default": {
+      "schema": "UserPreferences",
+      "description": "Private user preferences and theme settings."
+    }
+  }
+}

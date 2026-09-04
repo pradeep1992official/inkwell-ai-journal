@@ -3,10 +3,13 @@ import { User } from 'firebase/auth';
 import { subscribeToAuthState } from './lib/firebase';
 import { 
   subscribeToUserEntries, 
-  softDeleteJournalEntry,
+  softDeleteJournalEntry, 
   restoreJournalEntry, 
-  saveJournalEntry 
+  saveJournalEntry, 
+  cleanUpEmptyOrphanedEntries,
+  isEntryEmptyOrphan
 } from './lib/firestoreService';
+import { checkAndSeedSampleEntry } from './lib/sampleEntryService';
 import { JournalEntry } from './types';
 import { Navbar } from './components/Navbar';
 import { LandingPage } from './components/LandingPage';
@@ -20,6 +23,7 @@ import { HowToUseModal } from './components/HowToUseModal';
 import { MoodTrendsModal } from './components/MoodTrendsModal';
 import { CalendarDayReview } from './components/CalendarDayReview';
 import { MyMemoriesModal } from './components/MyMemoriesModal';
+import { AskMyLifeModal } from './components/AskMyLifeModal';
 import { AppLockOverlay } from './components/AppLockOverlay';
 import { OnboardingTour } from './components/OnboardingTour';
 import { isAppLockConfigured } from './lib/lockService';
@@ -35,11 +39,15 @@ interface DeletedToastState {
 }
 
 export default function App() {
-  const { t, loadUserPreferences, isLocked, unlockApp, lockSettings, weatherEnabled } = usePreferences();
+  const { t, loadUserPreferences, isLocked, lockApp, unlockApp, lockSettings, weatherEnabled } = usePreferences();
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [draftEntry, setDraftEntry] = useState<JournalEntry | null>(null);
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const isCreatingEntryRef = useRef(false);
+
+  // Modals & Navigation state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -50,6 +58,7 @@ export default function App() {
   const [moodTrendsModalOpen, setMoodTrendsModalOpen] = useState(false);
   const [calendarReviewOpen, setCalendarReviewOpen] = useState(false);
   const [memoriesModalOpen, setMemoriesModalOpen] = useState(false);
+  const [askMyLifeOpen, setAskMyLifeOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
 
@@ -58,23 +67,39 @@ export default function App() {
   const [restoredToastMessage, setRestoredToastMessage] = useState<string | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const restoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasInitialCheckedSeedRef = useRef<boolean>(false);
 
   // Monitor Authentication state
   useEffect(() => {
     const unsubscribe = subscribeToAuthState((currentUser) => {
       setUser(currentUser);
       setAuthLoading(false);
-      if (currentUser) {
+      if (!currentUser) {
+        hasInitialCheckedSeedRef.current = false;
+      } else {
         loadUserPreferences(currentUser);
       }
     });
     return () => unsubscribe();
   }, [loadUserPreferences]);
 
+  // One-time session migration/cleanup to purge any existing empty/orphaned entries from Firestore
+  useEffect(() => {
+    if (!user) return;
+    const cleanupKey = `inkwell_cleaned_orphans_${user.uid}`;
+    if (!sessionStorage.getItem(cleanupKey)) {
+      sessionStorage.setItem(cleanupKey, 'true');
+      cleanUpEmptyOrphanedEntries(user.uid).catch((err) => {
+        console.warn('Orphan cleanup warning:', err);
+      });
+    }
+  }, [user]);
+
   // Monitor user's private Firestore collection
   useEffect(() => {
     if (!user) {
       setEntries([]);
+      setDraftEntry(null);
       setSelectedEntryId(null);
       return;
     }
@@ -82,11 +107,27 @@ export default function App() {
     const unsubscribe = subscribeToUserEntries(
       user.uid,
       (userEntries) => {
-        setEntries(userEntries);
+        // Filter out empty orphaned entries from the live vault list
+        const cleanEntries = userEntries.filter((e) => !isEntryEmptyOrphan(e));
+        setEntries(cleanEntries);
+
+        // On initial snapshot load of the session for an authenticated user, if vault is completely empty, trigger seed
+        if (!hasInitialCheckedSeedRef.current) {
+          hasInitialCheckedSeedRef.current = true;
+          if (cleanEntries.length === 0) {
+            checkAndSeedSampleEntry(user.uid, null).catch((err) => {
+              console.warn('[Inkwell App] Initial sample seed check warning:', err);
+            });
+          }
+        }
+
         // If no entry is selected and entries exist, select the most recent one
         setSelectedEntryId((prev) => {
-          if (prev && userEntries.some((e) => e.id === prev)) return prev;
-          return userEntries.length > 0 ? userEntries[0].id : null;
+          if (prev) {
+            if (draftEntry && draftEntry.id === prev) return prev;
+            if (cleanEntries.some((e) => e.id === prev)) return prev;
+          }
+          return cleanEntries.length > 0 ? cleanEntries[0].id : null;
         });
       },
       (error) => {
@@ -96,69 +137,84 @@ export default function App() {
     );
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, draftEntry]);
 
   // Calculate streak stats
   const streakStats = useMemo(() => calculateStreakStats(entries), [entries]);
 
-  // Active selected entry object
-  const activeEntry = useMemo(
-    () => entries.find((e) => e.id === selectedEntryId),
-    [entries, selectedEntryId]
-  );
-
-  // Create a brand new draft reflection
-  const handleNewEntry = useCallback(async () => {
-    if (!user) return;
-    const newId = `entry-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-
-    let initialWeather = undefined;
-    if (weatherEnabled && typeof navigator !== 'undefined' && navigator.permissions && navigator.permissions.query) {
-      try {
-        const perm = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
-        if (perm.state === 'granted') {
-          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              timeout: 4000,
-              maximumAge: 600000,
-              enableHighAccuracy: false,
-            });
-          }).catch(() => null);
-
-          if (pos) {
-            const w = await fetchCurrentWeather(pos.coords.latitude, pos.coords.longitude);
-            if (w) {
-              initialWeather = w;
-            }
-          }
-        }
-      } catch {
-        // Continue creating entry without blocking
-      }
+  // Active selected entry object (prioritizes active in-memory draft if selected)
+  const activeEntry = useMemo(() => {
+    if (draftEntry && draftEntry.id === selectedEntryId) {
+      return draftEntry;
     }
+    return entries.find((e) => e.id === selectedEntryId && !e.deletedAt);
+  }, [entries, selectedEntryId, draftEntry]);
 
-    const newEntry: JournalEntry = {
-      id: newId,
-      userId: user.uid,
-      title: 'New Reflection',
-      messages: [],
-      metadata: {
-        tags: [],
-        mood: undefined,
-        weather: initialWeather,
-      },
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+  // Create a brand new draft reflection (Lazy creation: in-memory only until user writes/saves)
+  const handleNewEntry = useCallback(async () => {
+    if (!user || isCreatingEntryRef.current) return;
+    isCreatingEntryRef.current = true;
 
     try {
-      await saveJournalEntry(user.uid, newEntry);
+      // If there is already an active blank draft reflection, simply select it without duplicate creation
+      if (draftEntry && (!draftEntry.messages || draftEntry.messages.length === 0)) {
+        setSelectedEntryId(draftEntry.id);
+        return;
+      }
+
+      const newId = `entry-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+
+      let initialWeather = undefined;
+      if (weatherEnabled && typeof navigator !== 'undefined' && navigator.permissions && navigator.permissions.query) {
+        try {
+          const perm = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+          if (perm.state === 'granted') {
+            const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject, {
+                timeout: 4000,
+                maximumAge: 600000,
+                enableHighAccuracy: false,
+              });
+            }).catch(() => null);
+
+            if (pos) {
+              const w = await fetchCurrentWeather(pos.coords.latitude, pos.coords.longitude);
+              if (w) {
+                initialWeather = w;
+              }
+            }
+          }
+        } catch {
+          // Continue creating draft without blocking
+        }
+      }
+
+      const newDraft: JournalEntry = {
+        id: newId,
+        userId: user.uid,
+        title: 'New Reflection',
+        messages: [],
+        metadata: {
+          tags: [],
+          mood: undefined,
+          weather: initialWeather,
+        },
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      // Lazy creation: Keep in memory as draftEntry. Do NOT save to Firestore yet!
+      setDraftEntry(newDraft);
       setSelectedEntryId(newId);
     } catch (err: any) {
-      console.error('Failed to create new entry:', err);
-      setGlobalError('Failed to initialize new reflection entry.');
+      console.error('Failed to create new draft reflection:', err);
+      setGlobalError('Failed to initialize new reflection.');
+    } finally {
+      setTimeout(() => {
+        isCreatingEntryRef.current = false;
+      }, 300);
     }
-  }, [user, weatherEnabled]);
+  }, [user, weatherEnabled, draftEntry]);
 
   // Save day synthesis as a brand new dedicated entry
   const handleSaveAsNewEntry = useCallback(
@@ -181,6 +237,7 @@ export default function App() {
         metadata: {
           tags: metadata?.tags || ['day-review', 'google-calendar'],
           mood: metadata?.mood || 'Reflective',
+          hasCustomTitle: true,
         },
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -233,6 +290,13 @@ export default function App() {
   // Handle entry deletion (Soft-delete with instant Undo capability)
   const handleDeleteEntry = async (entryId: string) => {
     if (!user) return;
+    if (draftEntry && draftEntry.id === entryId) {
+      setDraftEntry(null);
+      const remaining = entries.filter((e) => e.id !== entryId && !e.deletedAt);
+      setSelectedEntryId(remaining.length > 0 ? remaining[0].id : null);
+      return;
+    }
+
     const targetEntry = entries.find((e) => e.id === entryId);
     const entryTitle = targetEntry?.title || t.untitledReflection;
 
@@ -299,6 +363,33 @@ export default function App() {
     setDeletedToast(null);
   };
 
+  // Keyboard shortcut listener for manual lock: Alt+L, Ctrl+Shift+L, Cmd+Shift+L, Ctrl+Alt+L
+  useEffect(() => {
+    if (!user) return;
+
+    const handleLockShortcut = (e: KeyboardEvent) => {
+      // Check for lock shortcuts: Alt+L or Ctrl+Shift+L / Cmd+Shift+L or Ctrl+Alt+L
+      const isAltL = e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'l';
+      const isCtrlShiftL = (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'l';
+      const isCtrlAltL = (e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 'l';
+
+      if (isAltL || isCtrlShiftL || isCtrlAltL) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (lockSettings.enabled && lockSettings.pinHash) {
+          lockApp();
+        } else {
+          // If lock is not yet enabled or configured, open settings to help configure it
+          setSettingsOpen(true);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleLockShortcut, { capture: true });
+    return () => window.removeEventListener('keydown', handleLockShortcut, { capture: true });
+  }, [user, lockSettings.enabled, lockSettings.pinHash, lockApp]);
+
   // If initial auth is resolving
   if (authLoading) {
     return (
@@ -344,6 +435,7 @@ export default function App() {
           onOpenMoodTrends={() => setMoodTrendsModalOpen(true)}
           onOpenCalendarReview={() => setCalendarReviewOpen(true)}
           onOpenMemories={() => setMemoriesModalOpen(true)}
+          onOpenAskMyLife={() => setAskMyLifeOpen(true)}
           streakCount={streakStats.currentStreak}
         />
       )}
@@ -371,7 +463,12 @@ export default function App() {
           <HistorySidebar
             entries={entries}
             selectedEntryId={selectedEntryId}
-            onSelectEntry={(entry) => setSelectedEntryId(entry.id)}
+            onSelectEntry={(entry) => {
+              setSelectedEntryId(entry.id);
+              if (draftEntry && (!draftEntry.messages || draftEntry.messages.length === 0)) {
+                setDraftEntry(null);
+              }
+            }}
             onNewEntry={handleNewEntry}
             onDeleteEntry={handleDeleteEntry}
             isOpen={sidebarOpen}
@@ -381,7 +478,10 @@ export default function App() {
             onOpenHowToUse={() => setHowToUseOpen(true)}
             onOpenMoodTrends={() => setMoodTrendsModalOpen(true)}
             onOpenMemories={() => setMemoriesModalOpen(true)}
+            onOpenAskMyLife={() => setAskMyLifeOpen(true)}
             onToggleCollapse={() => setDesktopSidebarCollapsed(true)}
+            userId={user.uid}
+            userName={user.displayName || user.email?.split('@')[0] || ''}
           />
         )}
 
@@ -414,14 +514,21 @@ export default function App() {
                   userName={user.displayName || user.email?.split('@')[0] || ''}
                   entry={activeEntry}
                   onEntryUpdated={(updated) => {
-                    setEntries((prev) =>
-                      prev.map((e) => (e.id === updated.id ? updated : e))
-                    );
+                    // If this was a draft reflection, clear draft state since it's now persisted
+                    if (draftEntry && draftEntry.id === updated.id) {
+                      setDraftEntry(null);
+                    }
+                    setEntries((prev) => {
+                      const exists = prev.some((e) => e.id === updated.id);
+                      if (exists) {
+                        return prev.map((e) => (e.id === updated.id ? updated : e));
+                      }
+                      return [updated, ...prev];
+                    });
                   }}
                   onDeleteEntry={handleDeleteEntry}
                   focusMode={focusMode}
                   onToggleFocusMode={() => setFocusMode(!focusMode)}
-                  onOpenMoodTrends={() => setMoodTrendsModalOpen(true)}
                 />
               </motion.div>
             ) : (
@@ -472,6 +579,7 @@ export default function App() {
         entries={entries}
         onOpenExport={() => setExportModalOpen(true)}
         onOpenImport={() => setImportModalOpen(true)}
+        onOpenHowToUse={() => setHowToUseOpen(true)}
       />
 
       {/* Streak & Mindfulness Heatmap Modal */}
@@ -534,6 +642,19 @@ export default function App() {
         onNewEntry={() => {
           setMemoriesModalOpen(false);
           handleNewEntry();
+        }}
+      />
+
+      {/* Gemini AI: "Ask My Life" Semantic Vector Memory Search */}
+      <AskMyLifeModal
+        isOpen={askMyLifeOpen}
+        onClose={() => setAskMyLifeOpen(false)}
+        entries={entries}
+        userId={user.uid}
+        userName={user.displayName || user.email?.split('@')[0] || ''}
+        onSelectEntry={(entry) => {
+          setSelectedEntryId(entry.id);
+          setAskMyLifeOpen(false);
         }}
       />
 

@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Feather, X, CheckSquare, Tag, Smile, Copy, Check, Volume2, VolumeX, TrendingUp } from 'lucide-react';
+import { Sparkles, Feather, X, CheckSquare, Tag, Smile, Copy, Check, Volume2, VolumeX } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
 import { usePreferences } from '../context/PreferencesContext';
 
 export interface InsightsData {
@@ -16,7 +19,6 @@ interface InsightsModalProps {
   onClose: () => void;
   title: string;
   data: InsightsData | null;
-  onOpenMoodTrends?: () => void;
 }
 
 export const InsightsModal: React.FC<InsightsModalProps> = ({
@@ -24,7 +26,6 @@ export const InsightsModal: React.FC<InsightsModalProps> = ({
   onClose,
   title,
   data,
-  onOpenMoodTrends,
 }) => {
   const { t, language } = usePreferences();
   const [copied, setCopied] = useState(false);
@@ -181,8 +182,10 @@ Tags: ${data.tags?.map(t => `#${t}`).join(' ') || ''}
               <h4 className="text-xs font-bold uppercase tracking-wider theme-accent-text mb-2.5 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5" /> {t.executiveSummary}
               </h4>
-              <div className="p-4 rounded-2xl theme-bg-subtle border theme-border text-[15px] leading-relaxed shadow-xs">
-                {data.summary}
+              <div className="p-4 rounded-2xl theme-bg-subtle border theme-border text-[15px] leading-relaxed shadow-xs prose-inline">
+                <ReactMarkdown remarkPlugins={[remarkBreaks, remarkGfm]}>
+                  {data.summary}
+                </ReactMarkdown>
               </div>
             </div>
           )}
@@ -199,7 +202,11 @@ Tags: ${data.tags?.map(t => `#${t}`).join(' ') || ''}
                     <span className="w-5 h-5 rounded-full bg-[#1A73E8]/10 dark:bg-[#E8A33D]/20 text-[#1A73E8] dark:text-[#E8A33D] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border theme-border">
                       {idx + 1}
                     </span>
-                    <span className="text-[14px] leading-relaxed theme-text-primary">{insight}</span>
+                    <div className="text-[14px] leading-relaxed theme-text-primary prose-inline min-w-0">
+                      <ReactMarkdown remarkPlugins={[remarkBreaks, remarkGfm]}>
+                        {insight}
+                      </ReactMarkdown>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -218,7 +225,11 @@ Tags: ${data.tags?.map(t => `#${t}`).join(' ') || ''}
                     <span className="w-5 h-5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-emerald-500/20">
                       {idx + 1}
                     </span>
-                    <span className="text-[14px] leading-relaxed theme-text-primary">{idea}</span>
+                    <div className="text-[14px] leading-relaxed theme-text-primary prose-inline min-w-0">
+                      <ReactMarkdown remarkPlugins={[remarkBreaks, remarkGfm]}>
+                        {idea}
+                      </ReactMarkdown>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -257,19 +268,6 @@ Tags: ${data.tags?.map(t => `#${t}`).join(' ') || ''}
               <Sparkles className="w-3 h-3 theme-accent-text" />
               {data.modelUsed ? `Processed by ${data.modelUsed}` : 'Powered by Gemini'}
             </span>
-            {onOpenMoodTrends && (
-              <button
-                id="btn-insights-open-mood-trends"
-                onClick={() => {
-                  onClose();
-                  onOpenMoodTrends();
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 dark:bg-amber-500/10 text-[#1A73E8] dark:text-[#E8A33D] hover:bg-blue-500/20 dark:hover:bg-amber-500/20 font-medium transition-colors border border-blue-500/20 dark:border-amber-500/20 cursor-pointer"
-              >
-                <TrendingUp className="w-3 h-3" />
-                <span>{t.moodTrends}</span>
-              </button>
-            )}
           </div>
           <button
             onClick={onClose}
