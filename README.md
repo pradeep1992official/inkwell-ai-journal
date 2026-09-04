@@ -193,24 +193,14 @@ Deploy the following owner-bound security rules in `firestore.rules` to enforce 
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Owner-bound isolation for user profile document
+    // Owner-bound isolation for user document
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
-      
-      // User reflections and journal entries
-      match /entries/{entryId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // User preferences and settings
-      match /settings/{settingDoc} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-      
-      // Catch-all isolation for any user subcollections
-      match /{allSubcollections=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
+    }
+    
+    // Owner-bound isolation for all user subcollections (entries, settings, etc.)
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

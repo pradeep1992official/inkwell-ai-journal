@@ -10,7 +10,7 @@ Inkwell pairs the warmth and tactile intimacy of personal journaling with empath
 
 ### 1. User Identity & Privacy-Preserving Authentication
 - **Federated Google Sign-In**: Streamlined, passwordless authentication via Firebase Auth with zero custom credential storage.
-- **Guest / Demo Mode**: Full exploration mode with local memory and session persistence.
+- **Guest / Demo Mode**: Instant, credential-free exploration via Firebase Anonymous Authentication — guest sessions receive a genuine, unique `uid` and are subject to the exact same owner-isolated Firestore security rules as fully authenticated accounts. Guest data is scoped to that browser/device and is not linked across devices unless upgraded to a full Google account.
 - **Sample Reflection Auto-Seeding**: Automatic provisioning of an interactive introductory journal entry for new users or upon vault reset to immediately demonstrate features.
 
 ### 2. Multi-Turn Conversational Reflection with Gemini AI
@@ -97,6 +97,28 @@ Inkwell pairs the warmth and tactile intimacy of personal journaling with empath
 - **Zero-Loss Auto-Drafting**: Automatically preserves in-progress writing in local storage buffers (`inkwell_draft_*`).
 - **Zero-Crash Payload Hygiene**: Recursive `undefined`-stripping ensures clean Firestore writes.
 - **Trash & Recovery Vault**: Soft-deletion (`deletedAt`), recoverable trash bin, and permanent purge protection.
+
+### 14. Photo Attachments
+- **Single-Image Upload per Entry**: Attach a photo (JPEG/PNG/WebP) to any reflection via Firebase Cloud Storage, stored under an owner-isolated path (`users/{userId}/entries/{entryId}/`) with matching Storage Security Rules.
+- **Export-Aware**: Attached photos are embedded directly into PDF exports and referenced in JSON exports.
+- **Lifecycle-Managed**: Photos are cleaned up automatically when their parent entry is permanently deleted.
+
+### 15. App Lock & Session Security
+- **4-Digit PIN + Biometric Unlock**: Optional app-level lock (WebAuthn biometric where supported, PIN fallback) independent of Firebase Auth — protects against casual/opportunistic access to an already-unlocked device.
+- **Configurable Auto-Lock**: Timestamp-based inactivity detection (immune to background-tab throttling) with user-selectable timeout windows.
+- **Manual "Lock Journal Now"**: One-click immediate lock from the profile menu, with safeguards preventing lockout if no PIN has been configured.
+
+### 16. Focus Mode & Distraction Protection
+- **Focus Mode**: Strips the interface to just the writing canvas (optionally requesting browser Fullscreen), for distraction-free reflection.
+- **Draft Protection**: Page Visibility API-backed autosave ensures in-progress writing survives tab switches, notifications, or accidental navigation.
+
+### 17. Guided Onboarding
+- **State-Aware First-Time Tour**: A 6-step guided tour adapts to whether the user has existing reflections, avoiding broken tooltips on empty-state accounts.
+- **Replayable**: Accessible anytime via the profile menu's "Feature Tour."
+
+### 18. Account & Data Ownership
+- **Full Account Deletion**: Permanently deletes all Firestore data (entries, settings, streak history, photos) tied to a user's account, with explicit confirmation required.
+- **JSON Import**: Restores a previously exported JSON backup via non-destructive merge, with duplicate detection.
 
 ---
 
@@ -216,22 +238,24 @@ Deploy Inkwell directly to Google Cloud Run from source:
 
 ```bash
 # Deploy to Cloud Run from source with Secret Manager binding
-gcloud run deploy inkwell \
+gcloud run deploy inkwell-ai-journal \
   --source . \
-  --region us-central1 \
+  --region asia-southeast1 \
   --allow-unauthenticated \
   --set-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest \
   --port 3000
 ```
+
+**Live deployment**: [inkwell-ai-journal-28427011026.asia-southeast1.run.app](https://inkwell-ai-journal-28427011026.asia-southeast1.run.app)
 
 ### Challenge Campaign Labeling
 
 Apply the required campaign label for automated challenge verification:
 
 ```bash
-gcloud run services update inkwell \
+gcloud run services update inkwell-ai-journal \
   --update-labels=dev-tutorial=cloud-run-ai-challenge \
-  --region=us-central1
+  --region=asia-southeast1
 ```
 
 ---
@@ -265,6 +289,11 @@ gcloud run services update inkwell \
 | **TC-23** | Google Calendar Day Review Synthesis | Authorizing Google Calendar pulls the day's event timeline; Gemini generates an accomplishment and energy-drain analysis for one-click journal insertion. |
 | **TC-24** | "Ask My Life" Semantic Search & Citations | Asking a conversational question (e.g., *"When did I feel most proud?"*) retrieves top semantically similar memories and provides a cited AI response. |
 | **TC-25** | Trash & Recovery Vault | Soft-deleting an entry moves it to Trash; entries can be restored to active vault or permanently purged. |
+| **TC-26** | Photo Attachment | Attaching a photo to a reflection uploads it to owner-isolated Cloud Storage, displays inline, and is embedded in PDF export. |
+| **TC-27** | App Lock — PIN Setup & Auto-Lock | Setting a 4-digit PIN in Settings and leaving the app idle past the configured timeout triggers the lock screen; correct PIN or biometric restores access. |
+| **TC-28** | Focus Mode | Enabling Focus Mode hides sidebar/navigation, leaving only the writing canvas; exiting restores full layout without glitches. |
+| **TC-29** | Guided Onboarding Tour | First sign-in triggers a 6-step tour that correctly adapts to empty-state vs. existing-entries accounts; replayable via profile menu. |
+| **TC-30** | Full Account Deletion | Selecting "Delete Account" with confirmation permanently removes all Firestore data and signs the user out. |
 
 ---
 
