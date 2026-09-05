@@ -502,10 +502,10 @@ export default function App() {
             {activeEntry ? (
               <motion.div
                 key={activeEntry.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.22, ease: [0.25, 1, 0.5, 1] }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
                 className="flex-1 min-h-0 flex flex-col h-full w-full overflow-hidden"
               >
                 <JournalEditor

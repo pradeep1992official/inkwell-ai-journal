@@ -686,10 +686,12 @@ Focus solely on the next single 30-minute block. Decide what one outcome serves 
 Responding to your follow-up: *"${quote}"*${priorUserQuote ? `\n\n*Building upon your earlier reflection on "${priorUserQuote}"*: ` : ''}
 
 Taking this conversation one step deeper${name}:
+
 - **The Core Shift**: In moving from the initial thought to your question *"${quote}"*, you are actively searching for leverage and actionable clarity rather than remaining in reactive friction.
 - **Cognitive Perspective**: When dealing with ${entities}, the most sustainable answers come from aligning your actions with what you value most, even when circumstances around you are turbulent.
 
 **Two Inquiries to Continue Unpacking:**
+
 1. If you trusted your own judgment completely right now without seeking outside validation, what would you do?
 2. What is one small expectation you can release today to give yourself more mental breathing room?
 
@@ -704,6 +706,7 @@ Examining what you shared: *"${quote}"*
 Navigating situations involving ${entities} often surfaces complex tensions between external demands and our internal equilibrium${name}. 
 
 **Cognitive Analysis & Observations:**
+
 - **Context & Subtext**: You are dealing with real friction here—not just an abstract thought. When situations like *"${quote}"* occur, they often challenge our sense of agency, fairness, or personal pacing.
 - **The Underlying Dynamic**: ${
     analysis.theme === 'conflict_work'
@@ -725,6 +728,7 @@ Navigating situations involving ${entities} often surfaces complex tensions betw
   }
 
 **Perceptive Inquiries for You:**
+
 1. **Core Value Alignment**: What is the most fundamental principle or boundary you want to hold firm in this situation?
 2. **The Calmer Response**: If you stepped back and responded with unhurried composure rather than pressure, what is the single most constructive move you could make next?
 

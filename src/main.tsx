@@ -19,13 +19,22 @@ if (rootElement) {
   );
 }
 
-// Clean up any stale service workers that could cache older broken bundles
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    for (const registration of registrations) {
-      registration.unregister().catch(() => {});
-    }
-  }).catch(() => {});
+// Clean up any stale service workers or caches that could serve older broken bundles in Chrome/Edge
+if (typeof window !== 'undefined') {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister().catch(() => {});
+      }
+    }).catch(() => {});
+  }
+  if ('caches' in window) {
+    caches.keys().then((keys) => {
+      for (const key of keys) {
+        caches.delete(key).catch(() => {});
+      }
+    }).catch(() => {});
+  }
 }
 
 

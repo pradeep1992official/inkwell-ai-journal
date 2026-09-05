@@ -91,6 +91,23 @@ function formatSentenceCaseName(raw?: string): string {
   return nameToken.charAt(0).toUpperCase() + nameToken.slice(1).toLowerCase();
 }
 
+/**
+ * Ensures clean CommonMark parsing by guaranteeing lists, numbered items, and headers
+ * have preceding line breaks so they render as structured HTML elements.
+ */
+function formatMarkdownContent(rawText: string): string {
+  if (!rawText) return '';
+  return rawText
+    // Normalize unicode bullets (•, ‣, ⁃) to standard markdown dash list items (- )
+    .replace(/^[\t ]*[•‣⁃][\t ]+/gm, '- ')
+    // Ensure blank line before bullet lists (- or * or +) if immediately preceded by text
+    .replace(/([^\n])\n\s*([*+-])\s+/g, '$1\n\n$2 ')
+    // Ensure blank line before numbered lists (e.g. 1. or 2.) if immediately preceded by text
+    .replace(/([^\n])\n\s*(\d+\.)\s+/g, '$1\n\n$2 ')
+    // Ensure blank line before markdown headers (# to ######) if immediately preceded by text
+    .replace(/([^\n])\n\s*(#{1,6}\s+)/g, '$1\n\n$2');
+}
+
 export const JournalEditor: React.FC<JournalEditorProps> = ({
   userId,
   userName,
@@ -234,6 +251,9 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const prevEntryIdRef = useRef<string>(entry.id);
+  const prevMessagesCountRef = useRef<number>(entry.messages.length);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const commonMoods = [
@@ -297,9 +317,24 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     }
   }, []);
 
+  // Smart reading scroll management: Reset to top when opening an entry, scroll to bottom only when typing/generating
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [entry.messages, isGenerating]);
+    // If switching to a different reflection, start reading at the top
+    if (prevEntryIdRef.current !== entry.id) {
+      prevEntryIdRef.current = entry.id;
+      prevMessagesCountRef.current = entry.messages.length;
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop = 0;
+      }
+      return;
+    }
+
+    // Scroll to bottom only if a new message was added or AI is streaming
+    if (entry.messages.length > prevMessagesCountRef.current || isGenerating) {
+      prevMessagesCountRef.current = entry.messages.length;
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [entry.id, entry.messages.length, isGenerating]);
 
   // Dynamically auto-resize textarea as text grows
   useEffect(() => {
@@ -1330,7 +1365,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     <div className={`flex-1 min-h-0 flex flex-col h-full theme-bg-app theme-text-primary overflow-hidden transition-colors ${focusMode ? 'fixed inset-0 z-50' : ''}`}>
       {/* Top Journal Header & Metadata Bar */}
       <div className="relative z-30 p-2.5 sm:p-4 border-b theme-border theme-bg-surface backdrop-blur-md shrink-0">
-        <div className="flex items-center justify-between gap-2">
+        <div className="w-full max-w-4xl mx-auto space-y-2">
+          <div className="flex items-center justify-between gap-2">
           {/* Title Area */}
           <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0">
             {isEditingTitle ? (
@@ -1547,9 +1583,9 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         </div>
 
         {/* Metadata Bar: Mood Dropdown and Tags */}
-        <div id="journal-meta-toolbar" className="mt-2 pt-2 sm:mt-3 sm:pt-2.5 border-t theme-border flex items-center justify-between gap-2 text-xs">
+        <div id="journal-meta-toolbar" className="pt-2 border-t theme-border flex items-center gap-2.5 sm:gap-3 text-xs overflow-x-auto scrollbar-none pb-1 w-full min-w-0 flex-nowrap">
           {/* Mood Dropdown and Location Controls */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 shrink-0">
             {/* Mood Dropdown Selector */}
             <div className="relative shrink-0" ref={moodDropdownRef}>
             {(() => {
@@ -1694,7 +1730,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-xs font-medium shadow-2xs group">
                 <button
                   onClick={() => setLocationPickerOpen(true)}
-                  className="flex items-center gap-1.5 hover:underline max-w-[140px] sm:max-w-[200px] truncate"
+                  className="flex items-center gap-1.5 hover:underline max-w-[140px] sm:max-w-[200px] min-w-0"
                   title={`Attached Place: ${entry.metadata.placeLocation.name} (${entry.metadata.placeLocation.formattedAddress}). Click to change.`}
                   id="btn-edit-attached-location"
                 >
@@ -1742,7 +1778,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               >
                 <button
                   onClick={() => setShowImageZoomModal(true)}
-                  className="flex items-center gap-1.5 hover:underline max-w-[130px] sm:max-w-[170px] truncate"
+                  className="flex items-center gap-1.5 hover:underline max-w-[130px] sm:max-w-[170px] min-w-0"
                   title="View attached photo full-size"
                   id="btn-view-attached-photo"
                 >
@@ -1793,7 +1829,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         </div>
 
           {/* Modular Tags */}
-          <div id="container-tags-bar" className="flex items-center gap-1.5 shrink-0 pl-2 border-l theme-border">
+          <div id="container-tags-bar" className="flex items-center gap-1.5 shrink-0 pl-2.5 border-l theme-border ml-auto sm:ml-0">
             <Tag className="w-3 h-3 theme-text-secondary shrink-0" />
             {entry.metadata?.tags?.map((tg) => (
               <span
@@ -1840,6 +1876,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           </div>
         </div>
       </div>
+    </div>
 
       {/* Weather Geolocation Gentle Permission Banner */}
       {showWeatherGeoBanner && weatherEnabled && !entry.metadata?.weather && (
@@ -1914,7 +1951,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       )}
 
       {/* Messages Stream Container (Reading Canvas) */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-2.5 sm:p-6 space-y-2.5 sm:space-y-4">
+      <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto p-2.5 sm:p-6">
+        <div className="w-full max-w-4xl mx-auto space-y-2.5 sm:space-y-4">
         {/* Uploading Photo Indicator */}
         {isUploadingImage && (
           <motion.div
@@ -1985,13 +2023,13 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               </div>
             </div>
             <div className="px-3.5 py-2 border-t theme-border flex items-center justify-between text-[11px] theme-text-secondary bg-black/2 dark:bg-white/2">
-              <div className="flex items-center gap-2 truncate">
-                <span className="font-semibold theme-text-primary flex items-center gap-1">
-                  <Camera className="w-3 h-3 text-violet-500" />
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-semibold theme-text-primary flex items-center gap-1 min-w-0">
+                  <Camera className="w-3 h-3 text-violet-500 shrink-0" />
                   <span className="truncate">{entry.attachedImage?.fileName || 'Attached Photo'}</span>
                 </span>
                 {entry.attachedImage?.fileSizeBytes && (
-                  <span className="opacity-75">
+                  <span className="opacity-75 shrink-0">
                     ({(entry.attachedImage.fileSizeBytes / (1024 * 1024)).toFixed(2)} MB)
                   </span>
                 )}
@@ -2136,7 +2174,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.2, ease: [0.25, 1, 0.5, 1] }}
-                  className={`flex gap-2 sm:gap-3 w-full max-w-3xl ${isUser ? 'ml-auto justify-end' : 'mr-auto justify-start'}`}
+                  className={`flex gap-2.5 sm:gap-3.5 w-full ${isUser ? 'justify-end' : 'justify-start'}`}
                 >
                   {/* Simplified Inkwell Monoline Quill Avatar */}
                   {!isUser && (
@@ -2148,8 +2186,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   <div
                     className={`relative rounded-2xl sm:rounded-3xl p-3 sm:p-5 transition-all ${
                       isUser
-                        ? 'theme-bg-subtle border theme-border theme-text-primary rounded-tr-sm max-w-[94%] sm:max-w-xl shadow-xs'
-                        : 'theme-bg-surface border theme-border theme-text-primary rounded-tl-sm flex-1 min-w-0 max-w-full sm:max-w-2xl shadow-sm'
+                        ? 'theme-bg-subtle border theme-border theme-text-primary rounded-tr-sm max-w-[92%] sm:max-w-xl shadow-xs'
+                        : 'theme-bg-surface border theme-border theme-text-primary rounded-tl-sm w-full shadow-sm'
                     } ${isSpeaking ? 'ring-2 ring-[#1A73E8]/40 dark:ring-[#E8A33D]/40 shadow-md' : ''}`}
                   >
                     {/* Message Header */}
@@ -2293,12 +2331,16 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                         </div>
                       ) : (
                         <div className="prose-reflection journal-entry-text theme-text-primary text-[13.5px] sm:text-[15px]">
-                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{msg.content}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                            {formatMarkdownContent(msg.content)}
+                          </ReactMarkdown>
                         </div>
                       )
                     ) : (
                       <div className="prose-reflection journal-entry-text theme-text-primary text-[13.5px] sm:text-[15px]">
-                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{msg.content}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                          {formatMarkdownContent(msg.content)}
+                        </ReactMarkdown>
                       </div>
                     )}
                   </div>
@@ -2315,7 +2357,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.1 }}
-            className="my-3 p-3 sm:p-4 rounded-2xl border border-dashed theme-border theme-bg-subtle/40 max-w-xl mx-auto text-center"
+            className="my-3 p-3 sm:p-4 rounded-2xl border border-dashed theme-border theme-bg-subtle max-w-xl mx-auto text-center"
           >
             <div className="flex items-center justify-center gap-1.5 text-xs font-semibold theme-text-secondary mb-2">
               <Sparkles className="w-3.5 h-3.5 theme-accent-text" />
@@ -2362,12 +2404,13 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           </motion.div>
         )}
 
-        <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Input & Reflection Mode Dock */}
       <div className="relative z-30 px-2.5 py-2 sm:px-4 sm:py-3 border-t theme-border theme-bg-surface backdrop-blur-md shrink-0">
-        <div className="w-full max-w-5xl mx-auto space-y-1.5 sm:space-y-2">
+        <div className="w-full max-w-4xl mx-auto space-y-1.5 sm:space-y-2">
           {/* Reflection Mode Dropdown Selector */}
           <div className="flex items-center gap-2 pb-0.5 text-xs">
             <span className="theme-text-secondary text-[11px] font-semibold hidden sm:inline">

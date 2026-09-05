@@ -137,7 +137,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-50 theme-bg-surface/95 backdrop-blur-md border-b theme-border theme-text-primary transition-colors shadow-xs shrink-0">
+    <header className="sticky top-0 z-50 theme-bg-surface backdrop-blur-md border-b theme-border theme-text-primary transition-colors shadow-xs shrink-0">
       <div className="w-full px-2.5 sm:px-6 h-13 sm:h-16 flex items-center justify-between">
         {/* Left branding */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -156,26 +156,26 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Feather className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="font-gemini-display font-bold text-base sm:text-lg tracking-tight theme-text-primary flex items-center gap-1.5 truncate">
-                  {t.appName}
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                <span className="font-gemini-display font-bold text-base sm:text-lg tracking-tight theme-text-primary flex items-center gap-1.5 min-w-0">
+                  <span className="truncate">{t.appName}</span>
                   {user?.isAnonymous ? (
                     <span
                       id="badge-guest-mode-nav"
                       title={t.guestModeNotice}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 shrink-0"
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                       {t.guestModeBadge}
                     </span>
                   ) : (
-                    <span className="text-[10px] sm:text-xs font-semibold px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 text-[#1A73E8] dark:text-[#E8A33D] border border-blue-500/20">
+                    <span className="text-[10px] sm:text-xs font-semibold px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 text-[#1A73E8] dark:text-[#E8A33D] border border-blue-500/20 shrink-0">
                       {t.geminiVersion}
                     </span>
                   )}
                 </span>
               </div>
-              <p className="text-[11px] theme-text-secondary hidden sm:block">
+              <p className="text-[11px] theme-text-secondary hidden sm:block truncate">
                 {t.appSubtitle}
               </p>
             </div>
@@ -294,7 +294,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   className="absolute right-0 top-full mt-2 z-50 w-64 sm:w-72 rounded-2xl theme-bg-surface border theme-border shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 flex flex-col max-h-[calc(100vh-4.5rem)] sm:max-h-[calc(100vh-5rem)] overflow-hidden"
                 >
                   {/* User Profile Header */}
-                  <div className="p-2.5 rounded-t-2xl theme-bg-subtle/70 border-b theme-border/60 shrink-0">
+                  <div className="p-2.5 rounded-t-2xl theme-bg-subtle border-b theme-border shrink-0">
                     <div className="flex items-center gap-2.5">
                       {user.photoURL ? (
                         <img
@@ -502,7 +502,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       </button>
                     )}
 
-                    <div className="border-t theme-border/60 my-1" />
+                    <div className="border-t theme-border my-1" />
 
                     {/* Section 2: Account & Settings */}
                     <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 px-2.5 pt-1 pb-0.5">
@@ -573,7 +573,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       </button>
                     )}
 
-                    <div className="border-t theme-border/60 my-1" />
+                    <div className="border-t theme-border my-1" />
 
                     {/* Sign Out */}
                     <button

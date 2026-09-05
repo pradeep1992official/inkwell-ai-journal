@@ -318,7 +318,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
         }`}
       >
         {/* Header */}
-        <div className="p-3.5 border-b theme-border flex items-center justify-between theme-bg-surface/80 shrink-0">
+        <div className="p-3.5 border-b theme-border flex items-center justify-between theme-bg-surface shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-blue-500/10 dark:bg-amber-400/10 flex items-center justify-center text-[#1A73E8] dark:text-[#E8A33D]">
               <Feather className="w-4 h-4 stroke-[2.2]" />
@@ -773,8 +773,17 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
             <AnimatePresence initial={false} mode="popLayout">
               {filteredEntries.map((entry, index) => {
                 const isSelected = entry.id === selectedEntryId;
-                const previewText = entry.messages.length > 0
-                  ? entry.messages[entry.messages.length - 1].content
+                const cleanPreview = (text: string) => {
+                  if (!text) return 'Empty entry';
+                  let cleaned = text.replace(/^⚠️[^\n]+\n*/i, '').trim();
+                  cleaned = cleaned.replace(/^#{1,6}\s+[^\n]+\n*/gm, '').trim();
+                  cleaned = cleaned.replace(/[*_#`~]/g, '');
+                  return cleaned.slice(0, 150) || 'Personal reflection';
+                };
+                const previewText = entry.summary
+                  ? cleanPreview(entry.summary)
+                  : entry.messages.length > 0
+                  ? cleanPreview(entry.messages[0].content)
                   : 'Empty entry';
 
                 return (
@@ -854,11 +863,9 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                       </div>
                     )}
 
-                    <div className="mt-1.5 text-[11px] theme-text-secondary line-clamp-2 leading-relaxed prose-preview">
-                      <ReactMarkdown remarkPlugins={[remarkBreaks, remarkGfm]}>
-                        {entry.summary || previewText}
-                      </ReactMarkdown>
-                    </div>
+                    <p className="mt-1.5 text-[11px] theme-text-secondary line-clamp-2 leading-relaxed font-normal">
+                      {previewText}
+                    </p>
 
                     <div className="mt-2.5 flex items-center justify-between gap-2 pt-2 border-t theme-border">
                       <div className="flex items-center gap-1.5 text-[10px] theme-text-secondary overflow-hidden max-w-[80%] flex-wrap">
@@ -926,7 +933,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
         </div>
 
         {/* Footer: Quick tools & Vault export */}
-        <div className="p-3 border-t theme-border theme-bg-surface/90 text-xs theme-text-secondary space-y-2 shrink-0 mt-auto">
+        <div className="p-3 border-t theme-border theme-bg-surface text-xs theme-text-secondary space-y-2 shrink-0 mt-auto">
           {/* My Memories (Google Places) Button */}
           {onOpenMemories && (
             <button
