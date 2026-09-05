@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { JournalEntry } from '../types';
 import { groupEntriesByCity, extractCityFromAddress } from '../lib/placesService';
+import { usePreferences } from '../context/PreferencesContext';
 
 interface MyMemoriesModalProps {
   isOpen: boolean;
@@ -34,6 +35,7 @@ export const MyMemoriesModal: React.FC<MyMemoriesModalProps> = ({
   onSelectEntry,
   onNewEntry,
 }) => {
+  const { t } = usePreferences();
   const [searchFilter, setSearchFilter] = useState('');
   const [expandedCities, setExpandedCities] = useState<Record<string, boolean>>({});
   const [expandedSnippets, setExpandedSnippets] = useState<Record<string, boolean>>({});
@@ -129,10 +131,10 @@ export const MyMemoriesModal: React.FC<MyMemoriesModalProps> = ({
               </div>
               <div>
                 <h2 className="text-lg sm:text-xl font-bold font-gemini-display theme-text-primary flex items-center gap-2">
-                  🗺️ My Memories
+                  🗺️ {t.myMemories}
                 </h2>
                 <p className="text-xs sm:text-sm theme-text-secondary">
-                  Browse your personal reflections clustered by city & place
+                  {t.memoriesByCitySubtitle}
                 </p>
               </div>
             </div>
@@ -404,7 +406,7 @@ export const MyMemoriesModal: React.FC<MyMemoriesModalProps> = ({
               onClick={onClose}
               className="px-3.5 py-1.5 rounded-lg theme-bg-surface hover:theme-bg-hover border theme-border font-medium theme-text-primary transition-colors text-xs"
             >
-              Done
+              {t.close}
             </button>
           </div>
         </motion.div>

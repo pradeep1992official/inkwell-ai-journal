@@ -314,11 +314,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     label: string;
     icon: React.ComponentType<{ className?: string }>;
   }> = [
-    { id: 'appearance', label: 'Appearance', icon: Palette },
-    { id: 'security', label: 'Security', icon: ShieldCheck },
-    { id: 'language', label: 'Language', icon: Globe },
-    { id: 'context', label: 'Context', icon: CloudSun },
-    { id: 'help', label: 'Help & Data', icon: BookOpen },
+    { id: 'appearance', label: t.tabAppearance || 'Appearance', icon: Palette },
+    { id: 'security', label: t.tabSecurity || 'Security', icon: ShieldCheck },
+    { id: 'language', label: t.tabLanguage || 'Language', icon: Globe },
+    { id: 'context', label: t.tabContext || 'Context', icon: CloudSun },
+    { id: 'help', label: t.tabHelp || 'Help & Data', icon: BookOpen },
   ];
 
   return (

@@ -106,10 +106,10 @@ export const ExportVaultModal: React.FC<ExportVaultModalProps> = ({
               </div>
               <div>
                 <h3 className="font-gemini-display font-bold text-lg theme-text-primary">
-                  {t.export}
+                  {t.exportVault}
                 </h3>
                 <p className="text-xs theme-text-secondary">
-                  Download your reflections as clean documents or backup data
+                  {t.exportSubtitle}
                 </p>
               </div>
             </div>
@@ -127,7 +127,7 @@ export const ExportVaultModal: React.FC<ExportVaultModalProps> = ({
             {currentEntry && (
               <div>
                 <label className="text-xs font-semibold theme-text-secondary uppercase tracking-wider block mb-2">
-                  Export Target
+                  {t.exportTarget}
                 </label>
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
@@ -166,7 +166,7 @@ export const ExportVaultModal: React.FC<ExportVaultModalProps> = ({
             {/* Format Selection */}
             <div>
               <label className="text-xs font-semibold theme-text-secondary uppercase tracking-wider block mb-2">
-                Document Format
+                {t.documentFormat}
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {/* PDF */}
@@ -276,7 +276,7 @@ export const ExportVaultModal: React.FC<ExportVaultModalProps> = ({
               ) : (
                 <>
                   <Download className="w-4 h-4" />
-                  <span>{isExporting ? 'Generating...' : 'Download File'}</span>
+                  <span>{isExporting ? '...' : t.export}</span>
                 </>
               )}
             </button>

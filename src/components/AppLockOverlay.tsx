@@ -196,7 +196,7 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({ isLocked, onUnlo
           {/* Keyboard typing hint badge */}
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full theme-bg-subtle text-[11px] theme-text-secondary mb-4 border theme-border shadow-2xs">
             <Keyboard className="w-3.5 h-3.5" />
-            <span>Type numbers on your keyboard or use keypad</span>
+            <span>{t.pinKeyboardHint}</span>
           </div>
 
           {/* Error / Notice Text */}

@@ -1635,7 +1635,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                     }}
                     className="w-full mt-1 pt-1.5 border-t theme-border text-[11px] text-center text-rose-500 hover:theme-bg-subtle py-1 rounded-lg transition-colors font-medium"
                   >
-                    Clear Mood
+                    {t.clearMood}
                   </button>
                 )}
               </div>
@@ -1682,7 +1682,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   ) : (
                     <CloudSun className="w-3.5 h-3.5 text-sky-600/70 dark:text-sky-400/70" />
                   )}
-                  <span className="hidden xs:inline">Weather</span>
+                  <span className="hidden xs:inline">{t.weather}</span>
                 </button>
               )}
             </div>
@@ -1718,8 +1718,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium theme-text-secondary hover:text-emerald-600 dark:hover:text-emerald-400 hover:theme-bg-subtle border border-transparent hover:theme-border transition-colors whitespace-nowrap"
               >
                 <MapPin className="w-3.5 h-3.5 text-emerald-600/70 dark:text-emerald-400/70" />
-                <span className="hidden xs:inline">Add Location</span>
-                <span className="xs:hidden">Location</span>
+                <span className="hidden xs:inline">{t.addLocation}</span>
+                <span className="xs:hidden">{t.location}</span>
               </button>
             )}
           </div>
@@ -1785,8 +1785,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                 ) : (
                   <Camera className="w-3.5 h-3.5 text-violet-600/70 dark:text-violet-400/70" />
                 )}
-                <span className="hidden xs:inline">{isUploadingImage ? uploadProgressMsg : 'Attach Photo'}</span>
-                <span className="xs:hidden">{isUploadingImage ? '...' : 'Photo'}</span>
+                <span className="hidden xs:inline">{isUploadingImage ? uploadProgressMsg : t.attachPhoto}</span>
+                <span className="xs:hidden">{isUploadingImage ? '...' : t.photo}</span>
               </button>
             )}
           </div>
@@ -2024,7 +2024,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               </span>
             </h3>
             <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm theme-text-secondary leading-relaxed max-w-md">
-              Share what’s on your mind—experiences, dilemmas, gratitude, or quiet thoughts. Gemini provides empathetic reasoning and mindful perspectives.
+              {t.editorGreetingSubtitle}
             </p>
 
             {/* Reflection Starter Prompt Cards */}
@@ -2156,15 +2156,15 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                     <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 sm:mb-2 sm:pb-1.5 border-b theme-border text-[10px] sm:text-[11px] theme-text-secondary">
                       <div className="flex items-center gap-1.5 sm:gap-2">
                         <span className="font-semibold theme-accent-text">
-                          {isUser ? 'Your Thought' : msg.isFallback ? 'Offline Reflection' : 'Inkwell AI'}
+                          {isUser ? t.yourThought : msg.isFallback ? t.offlineReflection : 'Inkwell AI'}
                         </span>
                         {!isUser && msg.isFallback && (
                           <span 
-                            title={msg.modelUsed || 'Live Gemini API unavailable - offline reflection'}
+                            title={msg.modelUsed || t.offlineReflectionDesc}
                             className="inline-flex items-center gap-1 px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full text-[9px] font-medium bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
                           >
                             <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
-                            <span>Offline Mode</span>
+                            <span>{t.offlineMode}</span>
                           </span>
                         )}
                         {isSpeaking && (
@@ -2371,7 +2371,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           {/* Reflection Mode Dropdown Selector */}
           <div className="flex items-center gap-2 pb-0.5 text-xs">
             <span className="theme-text-secondary text-[11px] font-semibold hidden sm:inline">
-              Mode:
+              {t.modeLabel}
             </span>
             <div className="relative" ref={modeDropdownRef}>
               <button
@@ -2395,7 +2395,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               {isModeOpen && (
                 <div className="absolute left-0 bottom-full mb-1.5 z-50 w-56 p-1.5 rounded-2xl theme-bg-surface border theme-border shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95">
                   <div className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 theme-text-secondary">
-                    Reflection Mode
+                    {t.reflectionMode}
                   </div>
                   <div className="space-y-1 my-1">
                     {[
@@ -2535,7 +2535,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           </div>
 
           <div className="hidden sm:flex items-center justify-between text-[11px] theme-text-secondary px-2">
-            <span>Press <kbd className="px-1 py-0.5 rounded theme-bg-surface theme-text-primary border theme-border text-[10px]">Enter</kbd> to send, <kbd className="px-1 py-0.5 rounded theme-bg-surface theme-text-primary border theme-border text-[10px]">Shift+Enter</kbd> for newline</span>
+            <span>{t.pressEnterToSend}</span>
             <span className="text-[10px] theme-accent-text font-semibold flex items-center gap-1">
               <Feather className="w-3 h-3" />
               {t.geminiVersion}

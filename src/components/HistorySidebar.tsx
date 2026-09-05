@@ -368,7 +368,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
               }`}
             >
               <Search className="w-3.5 h-3.5" />
-              <span>Keyword</span>
+              <span>{t.keyword}</span>
             </button>
             <button
               id="btn-sidebar-mode-ask"
@@ -381,7 +381,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Ask My Life</span>
+              <span>{t.askMyLife}</span>
             </button>
           </div>
 
@@ -563,7 +563,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold theme-text-secondary flex items-center gap-1">
                   <BrainCircuit className="w-3.5 h-3.5 text-[#1A73E8] dark:text-[#E8A33D]" />
-                  Ask about your life memories
+                  {t.askLifeHeading}
                 </span>
                 {onOpenAskMyLife && (
                   <button
@@ -581,7 +581,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                 <input
                   id="input-sidebar-ask-query"
                   type="text"
-                  placeholder="e.g. When was I proudest?"
+                  placeholder={t.askLifePlaceholder}
                   value={askQuery}
                   onChange={(e) => setAskQuery(e.target.value)}
                   onKeyDown={(e) => {
@@ -849,7 +849,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                         />
                         <div className="absolute top-1.5 right-1.5 bg-black/60 backdrop-blur-xs text-white text-[9px] px-1.5 py-0.5 rounded-full flex items-center gap-1 font-medium shadow-xs">
                           <Camera className="w-2.5 h-2.5" />
-                          <span>Photo</span>
+                          <span>{t.photo}</span>
                         </div>
                       </div>
                     )}
@@ -868,7 +868,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                             className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20 text-[9px] font-medium"
                           >
                             <ImageIcon className="w-2.5 h-2.5 shrink-0" />
-                            <span>Photo</span>
+                            <span>{t.photo}</span>
                           </span>
                         )}
 
@@ -936,7 +936,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
             >
               <span className="flex items-center gap-2">
                 <MapPin className="w-3.5 h-3.5" />
-                <span>My Memories (Places)</span>
+                <span>{t.myMemoriesPlaces}</span>
               </span>
               <span className="text-[10px] opacity-70 group-hover:opacity-100 font-normal">
                 By City
@@ -950,7 +950,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
               className="inline-flex items-center gap-1.5 text-[11px] font-semibold theme-text-secondary hover:theme-accent-text transition-colors"
             >
               <Download className="w-3 h-3" />
-              <span>{t.export} Vault</span>
+              <span>{t.exportVault}</span>
             </button>
 
             {onOpenHowToUse ? (

@@ -340,6 +340,66 @@ export interface TranslationDictionary {
   accountLinkedSuccess: string;
   guestCalendarNotice: string;
   guestCalendarBtn: string;
+
+  // Localization Expansion
+  journalTools: string;
+  accountAndSecurity: string;
+  askMyLife: string;
+  aiMemory: string;
+  myMemories: string;
+  places: string;
+  journalingStreak: string;
+  streakTag: string;
+  trends: string;
+  googleCalendar: string;
+  schedule: string;
+  googleSignIn: string;
+  preferencesTag: string;
+  lockJournalNow: string;
+  dayUnit: string;
+  daysUnit: string;
+  offlineReflection: string;
+  offlineMode: string;
+  offlineReflectionDesc: string;
+  yourThought: string;
+  modeLabel: string;
+  reflectionMode: string;
+  keyword: string;
+  location: string;
+  addLocation: string;
+  photo: string;
+  attachPhoto: string;
+  weather: string;
+  exportVault: string;
+  myMemoriesPlaces: string;
+  byCity: string;
+  askLifeHeading: string;
+  askLifePlaceholder: string;
+  askLifeScanning: string;
+  clearMood: string;
+  pressEnterToSend: string;
+  pinKeyboardHint: string;
+  exportTarget: string;
+  documentFormat: string;
+  exportClientPrivacy: string;
+  exportSubtitle: string;
+  semanticSearch: string;
+  askLifeModalSubtitle: string;
+  askQuestionLabel: string;
+  askQuestionPlaceholder: string;
+  searchButton: string;
+  memoriesByCitySubtitle: string;
+  filterMemoriesPlaceholder: string;
+  expandAll: string;
+  collapseAll: string;
+  noLocationMemories: string;
+  editorGreetingSubtitle: string;
+  dailyMindfulReflection: string;
+  tabAppearance: string;
+  tabSecurity: string;
+  tabLanguage: string;
+  tabContext: string;
+  tabHelp: string;
 }
 
 export const translations: Record<Language, TranslationDictionary> = {
@@ -664,12 +724,72 @@ export const translations: Record<Language, TranslationDictionary> = {
     accountLinkedSuccess: 'Google Account successfully linked! Your reflections are now permanently protected.',
     guestCalendarNotice: 'Google Calendar integration requires a real Google account. Sign in with Google to connect your live schedule.',
     guestCalendarBtn: 'Sign in to Connect Calendar',
+
+    // Localization Expansion
+    journalTools: 'Journal Tools',
+    accountAndSecurity: 'Account & Security',
+    askMyLife: 'Ask My Life',
+    aiMemory: 'AI Memory',
+    myMemories: 'My Memories',
+    places: 'Places',
+    journalingStreak: 'Journaling Streak',
+    streakTag: 'streak',
+    trends: 'Trends',
+    googleCalendar: 'Google Calendar',
+    schedule: 'Schedule',
+    googleSignIn: 'Google Sign-in',
+    preferencesTag: 'Preferences',
+    lockJournalNow: 'Lock Journal Now',
+    dayUnit: 'day',
+    daysUnit: 'days',
+    offlineReflection: 'Offline Reflection',
+    offlineMode: 'Offline Mode',
+    offlineReflectionDesc: 'Live Gemini API unavailable - offline reflection',
+    yourThought: 'Your Thought',
+    modeLabel: 'Mode:',
+    reflectionMode: 'Reflection Mode',
+    keyword: 'Keyword',
+    location: 'Location',
+    addLocation: 'Add Location',
+    photo: 'Photo',
+    attachPhoto: 'Attach Photo',
+    weather: 'Weather',
+    exportVault: 'Export Vault',
+    myMemoriesPlaces: 'My Memories (Places)',
+    byCity: 'By City',
+    askLifeHeading: 'Ask about your life memories',
+    askLifePlaceholder: 'e.g. When was I proudest?',
+    askLifeScanning: 'Scanning your private journal memory vault',
+    clearMood: 'Clear Mood',
+    pressEnterToSend: 'Press Enter to send, Shift+Enter for newline',
+    pinKeyboardHint: 'Type numbers on your keyboard or use keypad',
+    exportTarget: 'Export Target',
+    documentFormat: 'Document Format',
+    exportClientPrivacy: 'Exported files are generated entirely client-side and never leave your browser.',
+    exportSubtitle: 'Download your reflections as clean documents or backup data',
+    semanticSearch: 'Semantic Search',
+    askLifeModalSubtitle: 'Natural-language memory search over your journal, grounded in vector similarity & Gemini synthesis',
+    askQuestionLabel: 'Ask a question about your personal history:',
+    askQuestionPlaceholder: 'e.g. When was the last time I felt really proud? What did I write about my first project?',
+    searchButton: 'Search',
+    memoriesByCitySubtitle: 'Browse your personal reflections clustered by city & place',
+    filterMemoriesPlaceholder: 'Filter by city, title, or address...',
+    expandAll: 'Expand All',
+    collapseAll: 'Collapse All',
+    noLocationMemories: 'No memories tagged with locations yet.',
+    editorGreetingSubtitle: 'Share what’s on your mind—experiences, dilemmas, gratitude, or quiet thoughts. Gemini provides empathetic reasoning and mindful perspectives.',
+    dailyMindfulReflection: 'Daily mindful reflection',
+    tabAppearance: 'Appearance',
+    tabSecurity: 'Security',
+    tabLanguage: 'Language',
+    tabContext: 'Context',
+    tabHelp: 'Help & Data',
   },
 
   es: {
     appName: 'Inkwell',
     appSubtitle: 'Diario de reflexión con IA y espacio consciente',
-    geminiVersion: 'Powered by Gemini',
+    geminiVersion: 'Desarrollado con Gemini',
     vault: 'Bóveda',
     newReflection: 'Nueva Reflexión',
     newShort: 'Nuevo',
@@ -987,12 +1107,72 @@ export const translations: Record<Language, TranslationDictionary> = {
     accountLinkedSuccess: '¡Cuenta de Google vinculada con éxito! Tus reflexiones ahora están protegidas permanentemente.',
     guestCalendarNotice: 'La integración con Google Calendar requiere una cuenta de Google real. Inicia sesión con Google para conectar tu agenda.',
     guestCalendarBtn: 'Acceder para Conectar Calendario',
+
+    // Localization Expansion
+    journalTools: 'Herramientas de Diario',
+    accountAndSecurity: 'Cuenta y Seguridad',
+    askMyLife: 'Preguntar a mi Vida',
+    aiMemory: 'Memoria IA',
+    myMemories: 'Mis Recuerdos',
+    places: 'Lugares',
+    journalingStreak: 'Racha de Escritura',
+    streakTag: 'racha',
+    trends: 'Tendencias',
+    googleCalendar: 'Google Calendar',
+    schedule: 'Horario',
+    googleSignIn: 'Acceso con Google',
+    preferencesTag: 'Preferencias',
+    lockJournalNow: 'Bloquear Diario Ahora',
+    dayUnit: 'día',
+    daysUnit: 'días',
+    offlineReflection: 'Reflexión sin Conexión',
+    offlineMode: 'Modo sin Conexión',
+    offlineReflectionDesc: 'API de Gemini no disponible - reflexión sin conexión',
+    yourThought: 'Tu Pensamiento',
+    modeLabel: 'Modo:',
+    reflectionMode: 'Modo de Reflexión',
+    keyword: 'Palabra clave',
+    location: 'Ubicación',
+    addLocation: 'Añadir Ubicación',
+    photo: 'Foto',
+    attachPhoto: 'Adjuntar Foto',
+    weather: 'Clima',
+    exportVault: 'Exportar Bóveda',
+    myMemoriesPlaces: 'Mis Recuerdos (Lugares)',
+    byCity: 'Por Ciudad',
+    askLifeHeading: 'Pregunta sobre los recuerdos de tu vida',
+    askLifePlaceholder: 'p. ej. ¿Cuándo me sentí más orgulloso?',
+    askLifeScanning: 'Analizando tu bóveda de memoria de diario privada',
+    clearMood: 'Borrar Estado de Ánimo',
+    pressEnterToSend: 'Pulsa Enter para enviar, Shift+Enter para nueva línea',
+    pinKeyboardHint: 'Escribe números con el teclado o usa el teclado numérico',
+    exportTarget: 'Destino de Exportación',
+    documentFormat: 'Formato de Documento',
+    exportClientPrivacy: 'Los archivos exportados se generan enteramente en el cliente y nunca salen de su navegador.',
+    exportSubtitle: 'Descarga tus reflexiones como documentos limpios o datos de respaldo',
+    semanticSearch: 'Búsqueda Semántica',
+    askLifeModalSubtitle: 'Búsqueda en lenguaje natural en tu diario, basada en similitud vectorial y síntesis de Gemini',
+    askQuestionLabel: 'Haz una pregunta sobre tu historia personal:',
+    askQuestionPlaceholder: 'p. ej. ¿Cuándo fue la última vez que me sentí realmente orgulloso? ¿Qué escribí sobre mi primer proyecto?',
+    searchButton: 'Buscar',
+    memoriesByCitySubtitle: 'Explora tus reflexiones personales agrupadas por ciudad y lugar',
+    filterMemoriesPlaceholder: 'Filtrar por ciudad, título o dirección...',
+    expandAll: 'Expandir Todo',
+    collapseAll: 'Contraer Todo',
+    noLocationMemories: 'Aún no hay recuerdos etiquetados con ubicaciones.',
+    editorGreetingSubtitle: 'Comparte lo que tengas en mente: experiencias, dilemas, gratitud o pensamientos serenos. Gemini te ofrece reflexión empática y perspectivas conscientes.',
+    dailyMindfulReflection: 'Reflexión consciente diaria',
+    tabAppearance: 'Apariencia',
+    tabSecurity: 'Seguridad',
+    tabLanguage: 'Idioma',
+    tabContext: 'Contexto',
+    tabHelp: 'Ayuda y datos',
   },
 
   fr: {
     appName: 'Inkwell',
     appSubtitle: 'Journal de réflexion IA & espace de pensée consciente',
-    geminiVersion: 'Powered by Gemini',
+    geminiVersion: 'Propulsé par Gemini',
     vault: 'Coffre',
     newReflection: 'Nouvelle Réflexion',
     newShort: 'Nouveau',
@@ -1310,12 +1490,72 @@ export const translations: Record<Language, TranslationDictionary> = {
     accountLinkedSuccess: 'Compte Google associé avec succès ! Vos réflexions sont désormais protégées en permanence.',
     guestCalendarNotice: 'L’intégration Google Agenda nécessite un vrai compte Google. Connectez-vous avec Google pour lier votre emploi du temps.',
     guestCalendarBtn: 'Se connecter pour lier l’Agenda',
+
+    // Localization Expansion
+    journalTools: 'Outils de Journal',
+    accountAndSecurity: 'Compte et Sécurité',
+    askMyLife: 'Interroger ma Vie',
+    aiMemory: 'Mémoire IA',
+    myMemories: 'Mes Souvenirs',
+    places: 'Lieux',
+    journalingStreak: 'Série de Journal',
+    streakTag: 'série',
+    trends: 'Tendances',
+    googleCalendar: 'Google Agenda',
+    schedule: 'Emploi du temps',
+    googleSignIn: 'Connexion Google',
+    preferencesTag: 'Préférences',
+    lockJournalNow: 'Verrouiller le Journal',
+    dayUnit: 'jour',
+    daysUnit: 'jours',
+    offlineReflection: 'Réflexion Hors-ligne',
+    offlineMode: 'Mode Hors-ligne',
+    offlineReflectionDesc: 'API Gemini non disponible - réflexion hors-ligne',
+    yourThought: 'Votre Pensée',
+    modeLabel: 'Mode :',
+    reflectionMode: 'Mode de Réflexion',
+    keyword: 'Mot-clé',
+    location: 'Lieu',
+    addLocation: 'Ajouter un Lieu',
+    photo: 'Photo',
+    attachPhoto: 'Joindre une Photo',
+    weather: 'Météo',
+    exportVault: 'Exporter le Coffre',
+    myMemoriesPlaces: 'Mes Souvenirs (Lieux)',
+    byCity: 'Par Ville',
+    askLifeHeading: 'Interrogez les souvenirs de votre vie',
+    askLifePlaceholder: 'ex. Quand ai-je été le plus fier ?',
+    askLifeScanning: 'Analyse de votre coffre de souvenirs privés',
+    clearMood: 'Effacer l’Humeur',
+    pressEnterToSend: 'Appuyez sur Entrée pour envoyer, Maj+Entrée pour un saut de ligne',
+    pinKeyboardHint: 'Tapez les chiffres au clavier ou utilisez le pavé numérique',
+    exportTarget: 'Cible d’Exportation',
+    documentFormat: 'Format du Document',
+    exportClientPrivacy: 'Les fichiers exportés sont générés entièrement côté client et ne quittent jamais votre navigateur.',
+    exportSubtitle: 'Téléchargez vos réflexions sous forme de documents clairs ou de données de sauvegarde',
+    semanticSearch: 'Recherche Sémantique',
+    askLifeModalSubtitle: 'Recherche en langage naturel dans votre journal, basée sur la similarité vectorielle et la synthèse Gemini',
+    askQuestionLabel: 'Posez une question sur votre histoire personnelle :',
+    askQuestionPlaceholder: 'ex. Quand ai-je été vraiment fier pour la dernière fois ? Qu’ai-je écrit sur mon premier projet ?',
+    searchButton: 'Rechercher',
+    memoriesByCitySubtitle: 'Parcourez vos réflexions personnelles regroupées par ville et lieu',
+    filterMemoriesPlaceholder: 'Filtrer par ville, titre ou adresse...',
+    expandAll: 'Tout Développer',
+    collapseAll: 'Tout Réduire',
+    noLocationMemories: 'Aucun souvenir associé à un lieu pour le moment.',
+    editorGreetingSubtitle: 'Partagez ce qui vous préoccupe : expériences, dilemmes, gratitude ou pensées silencieuses. Gemini vous offre une écoute empathique et des perspectives éclairées.',
+    dailyMindfulReflection: 'Réflexion quotidienne consciente',
+    tabAppearance: 'Apparence',
+    tabSecurity: 'Sécurité',
+    tabLanguage: 'Langue',
+    tabContext: 'Contexte',
+    tabHelp: 'Aide et données',
   },
 
   hi: {
     appName: 'Inkwell',
     appSubtitle: 'एआई चिंतन डायरी और विचारशील स्थान',
-    geminiVersion: 'Powered by Gemini',
+    geminiVersion: 'Gemini द्वारा संचालित',
     vault: 'वॉल्ट',
     newReflection: 'नया चिंतन',
     newShort: 'नया',
@@ -1633,12 +1873,72 @@ export const translations: Record<Language, TranslationDictionary> = {
     accountLinkedSuccess: 'Google खाता सफलतापूर्वक लिंक हो गया! आपके चिंतन अब स्थायी रूप से सुरक्षित हैं।',
     guestCalendarNotice: 'Google Calendar एकीकरण के लिए वास्तविक Google खाते की आवश्यकता है। कैलेंडर जोड़ने के लिए Google से साइन इन करें।',
     guestCalendarBtn: 'कैलेंडर कनेक्ट करने के लिए साइन इन करें',
+
+    // Localization Expansion
+    journalTools: 'जर्नल टूल्स',
+    accountAndSecurity: 'खाता और सुरक्षा',
+    askMyLife: 'मेरे जीवन से पूछें',
+    aiMemory: 'AI स्मृति',
+    myMemories: 'मेरी यादें',
+    places: 'स्थान',
+    journalingStreak: 'जर्नलिंग स्ट्रीक',
+    streakTag: 'स्ट्रीक',
+    trends: 'रुझान',
+    googleCalendar: 'गूगल कैलेंडर',
+    schedule: 'अनुसूची',
+    googleSignIn: 'गूगल साइन-इन',
+    preferencesTag: 'प्राथमिकताएं',
+    lockJournalNow: 'जर्नल अभी लॉक करें',
+    dayUnit: 'दिन',
+    daysUnit: 'दिन',
+    offlineReflection: 'ऑफ़लाइन चिंतन',
+    offlineMode: 'ऑफ़लाइन मोड',
+    offlineReflectionDesc: 'लाइव Gemini API अनुपलब्ध - ऑफ़लाइन चिंतन',
+    yourThought: 'आपका विचार',
+    modeLabel: 'मोड:',
+    reflectionMode: 'चिंतन मोड',
+    keyword: 'कीवर्ड',
+    location: 'स्थान',
+    addLocation: 'स्थान जोड़ें',
+    photo: 'तस्वीर',
+    attachPhoto: 'तस्वीर जोड़ें',
+    weather: 'मौसम',
+    exportVault: 'वॉल्ट निर्यात करें',
+    myMemoriesPlaces: 'मेरी यादें (स्थान)',
+    byCity: 'शहर के अनुसार',
+    askLifeHeading: 'अपने जीवन की यादों के बारे में पूछें',
+    askLifePlaceholder: 'उदा. मुझे सबसे अधिक गर्व कब हुआ?',
+    askLifeScanning: 'आपके निजी जर्नल स्मृति वॉल्ट को स्कैन किया जा रहा है',
+    clearMood: 'मूड हटाएं',
+    pressEnterToSend: 'भेजने के लिए Enter दबाएं, नई लाइन के लिए Shift+Enter',
+    pinKeyboardHint: 'कीबोर्ड पर संख्याएं टाइप करें या कीपैड का उपयोग करें',
+    exportTarget: 'निर्यात लक्ष्य',
+    documentFormat: 'दस्तावेज़ प्रारूप',
+    exportClientPrivacy: 'निर्यात की गई फाइलें पूरी तरह से क्लाइंट-साइड पर उत्पन्न होती हैं और आपके ब्राउज़र से बाहर नहीं जाती हैं।',
+    exportSubtitle: 'अपने विचारों को स्पष्ट दस्तावेज़ या बैकअप डेटा के रूप में डाउनलोड करें',
+    semanticSearch: 'सिमेंटिक खोज',
+    askLifeModalSubtitle: 'प्राकृतिक भाषा में अपने जर्नल में खोज, वेक्टर समानता और Gemini संश्लेषण पर आधारित',
+    askQuestionLabel: 'अपने व्यक्तिगत इतिहास के बारे में एक प्रश्न पूछें:',
+    askQuestionPlaceholder: 'उदा. मुझे आखिरी बार कब वास्तव में गर्व महसूस हुआ था? मैंने अपनी पहली परियोजना के बारे में क्या लिखा था?',
+    searchButton: 'खोजें',
+    memoriesByCitySubtitle: 'शहर और स्थान के अनुसार समूहीकृत अपने व्यक्तिगत चिंतन को ब्राउज़ करें',
+    filterMemoriesPlaceholder: 'शहर, शीर्षक या पते के अनुसार फ़िल्टर करें...',
+    expandAll: 'सभी विस्तृत करें',
+    collapseAll: 'सभी संक्षिप्त करें',
+    noLocationMemories: 'स्थानों के साथ टैग की गई कोई यादें अभी उपलब्ध नहीं हैं।',
+    editorGreetingSubtitle: 'अपने मन की बात साझा करें—अनुभव, दुविधाएं, कृतज्ञता या शांत विचार। Gemini सहानुभूतिपूर्ण विचार और सजग दृष्टिकोण प्रदान करता है।',
+    dailyMindfulReflection: 'दैनिक विचारशील चिंतन',
+    tabAppearance: 'दिखावट',
+    tabSecurity: 'सुरक्षा',
+    tabLanguage: 'भाषा',
+    tabContext: 'संदर्भ',
+    tabHelp: 'सहायता और डेटा',
   },
 
   ta: {
     appName: 'Inkwell',
     appSubtitle: 'AI சிந்தனை நாட்குறிப்பு & அமைதியான சிந்தனை வெளி',
-    geminiVersion: 'Powered by Gemini',
+    geminiVersion: 'ஜெமினி மூலம் இயக்கப்படுகிறது',
     vault: 'பெட்டகம்',
     newReflection: 'புதிய சிந்தனை',
     newShort: 'புதியது',
@@ -1956,5 +2256,65 @@ export const translations: Record<Language, TranslationDictionary> = {
     accountLinkedSuccess: 'Google கணக்கு வெற்றிகரமாக இணைக்கப்பட்டது! உங்கள் சிந்தனைகள் இப்போது நிரந்தரமாகப் பாதுகாக்கப்படுகின்றன.',
     guestCalendarNotice: 'Google Calendar ஒருங்கிணைப்புக்கு உண்மையான Google கணக்கு தேவைப்படுகிறது. உங்கள் காலெண்டரை இணைக்க Google மூலம் உள்நுழைக.',
     guestCalendarBtn: 'காலெண்டரை இணைக்க உள்நுழைக',
+
+    // Localization Expansion
+    journalTools: 'ஜர்னல் கருவிகள்',
+    accountAndSecurity: 'கணக்கு மற்றும் பாதுகாப்பு',
+    askMyLife: 'என் வாழ்விடம் கேளுங்கள்',
+    aiMemory: 'AI நினைவகம்',
+    myMemories: 'என் நினைவுகள்',
+    places: 'இடங்கள்',
+    journalingStreak: 'ஜர்னலிங் தொடர்ச்சி',
+    streakTag: 'தொடர்ச்சி',
+    trends: 'போக்குகள்',
+    googleCalendar: 'கூகிள் காலண்டர்',
+    schedule: 'அட்டவணை',
+    googleSignIn: 'கூகிள் உள்நுழைவு',
+    preferencesTag: 'விருப்பத்தேர்வுகள்',
+    lockJournalNow: 'ஜர்னலை இப்போது பூட்டு',
+    dayUnit: 'நாள்',
+    daysUnit: 'நாட்கள்',
+    offlineReflection: 'ஆஃப்லைன் பிரதிபலிப்பு',
+    offlineMode: 'ஆஃப்லைன் பயன்முறை',
+    offlineReflectionDesc: 'நேரலை ஜெமினி API கிடைக்கவில்லை - ஆஃப்லைன் பிரதிபலிப்பு',
+    yourThought: 'உங்கள் எண்ணம்',
+    modeLabel: 'பயன்முறை:',
+    reflectionMode: 'சிந்தனை பயன்முறை',
+    keyword: 'முக்கிய சொல்',
+    location: 'இடம்',
+    addLocation: 'இடத்தைச் சேர்க்கவும்',
+    photo: 'புகைப்படம்',
+    attachPhoto: 'புகைப்படத்தை இணைக்கவும்',
+    weather: 'வானிலை',
+    exportVault: 'பெட்டகத்தை ஏற்றுமதி செய்',
+    myMemoriesPlaces: 'என் நினைவுகள் (இடங்கள்)',
+    byCity: 'நகரம் வாரியாக',
+    askLifeHeading: 'உங்கள் வாழ்க்கை நினைவுகளைப் பற்றிக் கேளுங்கள்',
+    askLifePlaceholder: 'எ.கா. நான் எப்போது மிகவும் பெருமைப்பட்டேன்?',
+    askLifeScanning: 'உங்கள் தனிப்பட்ட ஜர்னல் நினைவக பெட்டகம் ஸ்கேன் செய்யப்படுகிறது',
+    clearMood: 'மனநிலையை நீக்கு',
+    pressEnterToSend: 'அனுப்ப Enter அழுத்தவும், புதிய வரிக்கு Shift+Enter',
+    pinKeyboardHint: 'விசைப்பலகையில் எண்களைத் தட்டச்சு செய்யவும் அல்லது எண் பலகையைப் பயன்படுத்தவும்',
+    exportTarget: 'ஏற்றுமதி இலக்கு',
+    documentFormat: 'ஆவண வடிவம்',
+    exportClientPrivacy: 'ஏற்றுமதி செய்யப்பட்ட கோப்புகள் முழுமையாக உலாவிக்குள்ளேயே உருவாக்கப்படுகின்றன, வெளியே செல்லாது.',
+    exportSubtitle: 'உங்கள் சிந்தனைகளை நேர்த்தியான ஆவணங்களாக அல்லது காப்புத் தரவாகப் பதிவிறக்கவும்',
+    semanticSearch: 'பொருள்சார் தேடல்',
+    askLifeModalSubtitle: 'இயற்கை மொழி நினைவக தேடல், திசையன் ஒற்றுமை மற்றும் ஜெமினி தொகுப்புடன்',
+    askQuestionLabel: 'உங்கள் தனிப்பட்ட வரலாற்றைப் பற்றி ஒரு கேள்வியைக் கேளுங்கள்:',
+    askQuestionPlaceholder: 'எ.கா. கடைசியாக எப்போது நான் உண்மையிலேயே பெருமைப்பட்டேன்? எனது முதல் திட்டத்தைப் பற்றி நான் என்ன எழுதினேன்?',
+    searchButton: 'தேடு',
+    memoriesByCitySubtitle: 'நகரம் மற்றும் இடத்தின் அடிப்படையில் தொகுக்கப்பட்ட உங்கள் பிரதிபலிப்புகளைக் காண்க',
+    filterMemoriesPlaceholder: 'நகரம், தலைப்பு அல்லது முகவரி மூலம் வடிகட்டவும்...',
+    expandAll: 'அனைத்தையும் விரிவாக்கு',
+    collapseAll: 'அனைத்தையும் சுருக்கு',
+    noLocationMemories: 'இடங்களுடன் குறிக்கப்பட்ட நினைவுகள் எதுவும் இதுவரை இல்லை.',
+    editorGreetingSubtitle: 'உங்கள் மனதில் உள்ளதைப் பகிருங்கள்—அனுபவங்கள், குழப்பங்கள், நன்றியுணர்வு அல்லது அமைதியான எண்ணங்கள். ஜெமினி பரிவுமிக்க பகுப்பாய்வையும் விழிப்புணர்வு கண்ணோட்டத்தையும் வழங்குகிறது.',
+    dailyMindfulReflection: 'தினசரி அமைதியான சிந்தனை',
+    tabAppearance: 'தோற்றம்',
+    tabSecurity: 'பாதுகாப்பு',
+    tabLanguage: 'மொழி',
+    tabContext: 'சூழல்',
+    tabHelp: 'உதவி & தரவு',
   },
 };

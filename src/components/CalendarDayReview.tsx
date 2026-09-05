@@ -262,7 +262,7 @@ export const CalendarDayReview: React.FC<CalendarDayReviewProps> = ({
               </div>
               <div>
                 <h2 className="text-lg sm:text-xl font-bold font-gemini-display theme-text-primary flex items-center gap-2">
-                  Google Calendar — “What happened today?”
+                  {t.googleCalendar} — “What happened today?”
                 </h2>
                 <p className="text-xs sm:text-sm theme-text-secondary">
                   Connect your schedule with journal reflections & summarize with Gemini
@@ -728,7 +728,7 @@ export const CalendarDayReview: React.FC<CalendarDayReviewProps> = ({
               onClick={onClose}
               className="px-3 py-1 rounded-md theme-bg-surface hover:theme-bg-hover border theme-border text-xs font-medium theme-text-primary transition-colors"
             >
-              Done
+              {t.close}
             </button>
           </div>
         </motion.div>

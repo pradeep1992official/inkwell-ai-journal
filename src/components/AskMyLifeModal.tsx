@@ -54,7 +54,7 @@ export const AskMyLifeModal: React.FC<AskMyLifeModalProps> = ({
   onSelectEntry,
   initialQuery = '',
 }) => {
-  const { language } = usePreferences();
+  const { t, language } = usePreferences();
   const [query, setQuery] = useState(initialQuery);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState<string>('');
@@ -176,14 +176,14 @@ export const AskMyLifeModal: React.FC<AskMyLifeModalProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-base sm:text-lg font-gemini-display font-bold theme-text-primary">
-                    Ask My Life
+                    {t.askMyLife}
                   </h2>
                   <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-500/15 dark:bg-amber-400/15 text-[#1A73E8] dark:text-[#E8A33D] border border-[#1A73E8]/20">
                     Semantic Search
                   </span>
                 </div>
                 <p className="text-xs theme-text-secondary mt-0.5">
-                  Natural-language memory search over your journal, grounded in vector similarity & Gemini synthesis
+                  {t.askLifeModalSubtitle}
                 </p>
               </div>
             </div>
@@ -246,7 +246,7 @@ export const AskMyLifeModal: React.FC<AskMyLifeModalProps> = ({
             {/* Question Input Box */}
             <div className="space-y-2">
               <label htmlFor="input-ask-my-life-modal" className="block text-xs font-semibold theme-text-secondary uppercase tracking-wider">
-                Ask a question about your personal history:
+                {t.askQuestionLabel}
               </label>
               <div className="relative">
                 <textarea
@@ -283,7 +283,7 @@ export const AskMyLifeModal: React.FC<AskMyLifeModalProps> = ({
                     ) : (
                       <>
                         <Sparkles className="w-3.5 h-3.5" />
-                        <span>Ask</span>
+                        <span>{t.searchButton}</span>
                       </>
                     )}
                   </button>
@@ -296,7 +296,7 @@ export const AskMyLifeModal: React.FC<AskMyLifeModalProps> = ({
               <div className="space-y-2 pt-1">
                 <span className="text-[11px] font-semibold theme-text-secondary flex items-center gap-1.5">
                   <LightbulbIcon className="w-3.5 h-3.5 text-[#1A73E8] dark:text-[#E8A33D]" />
-                  Or try asking:
+                  {t.suggestedPrompts}
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {SAMPLE_QUESTIONS.map((q) => (
@@ -434,7 +434,7 @@ export const AskMyLifeModal: React.FC<AskMyLifeModalProps> = ({
               onClick={onClose}
               className="px-4 py-1.5 rounded-lg theme-bg-surface hover:theme-bg-hover border theme-border theme-text-primary font-medium text-xs transition-colors"
             >
-              Done
+              {t.close}
             </button>
           </div>
         </motion.div>

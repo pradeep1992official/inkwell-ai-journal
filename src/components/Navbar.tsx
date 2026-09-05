@@ -204,12 +204,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   id="btn-navbar-streak"
                   onClick={onOpenStreakModal}
-                  title={`${streakCount} day journaling streak — click for detailed heatmap & stats`}
+                  title={`${streakCount} ${streakCount === 1 ? t.dayUnit : t.daysUnit} ${t.streakTag}`}
                   className="inline-flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[11px] sm:text-xs font-bold transition-all border border-amber-500/20 active:scale-95"
                 >
                   <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-amber-500 text-amber-500" />
                   <span>{streakCount}</span>
-                  <span className="hidden md:inline font-normal text-amber-600/80 dark:text-amber-400/80 text-[11px]">days</span>
+                  <span className="hidden md:inline font-normal text-amber-600/80 dark:text-amber-400/80 text-[11px]">{streakCount === 1 ? t.dayUnit : t.daysUnit}</span>
                 </button>
               )}
 
@@ -378,7 +378,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                     {/* Section 1: Journal Tools */}
                     <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 px-2.5 pt-1 pb-0.5">
-                      Journal Tools
+                      {t.journalTools}
                     </div>
 
                     {/* Gemini Memory: Ask My Life */}
@@ -396,10 +396,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <div className="w-6 h-6 rounded-md bg-blue-500/10 dark:bg-amber-400/10 text-[#1A73E8] dark:text-[#E8A33D] flex items-center justify-center shrink-0">
                             <Sparkles className="w-3.5 h-3.5" />
                           </div>
-                          <span className="font-medium text-xs truncate">Ask My Life</span>
+                          <span className="font-medium text-xs truncate">{t.askMyLife}</span>
                         </div>
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-blue-500/10 dark:bg-amber-400/10 text-[#1A73E8] dark:text-[#E8A33D] shrink-0 ml-2">
-                          AI Memory
+                          {t.aiMemory}
                         </span>
                       </button>
                     )}
@@ -419,10 +419,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <div className="w-6 h-6 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
                             <MapPin className="w-3.5 h-3.5" />
                           </div>
-                          <span className="font-medium text-xs truncate">My Memories</span>
+                          <span className="font-medium text-xs truncate">{t.myMemories}</span>
                         </div>
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 ml-2">
-                          Places
+                          {t.places}
                         </span>
                       </button>
                     )}
@@ -442,10 +442,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <div className="w-6 h-6 rounded-md bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
                             <Flame className="w-3.5 h-3.5 fill-amber-500" />
                           </div>
-                          <span className="font-medium text-xs truncate">Journaling Streak</span>
+                          <span className="font-medium text-xs truncate">{t.journalingStreak}</span>
                         </div>
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 ml-2">
-                          {streakCount}d streak
+                          {streakCount} {t.streakTag}
                         </span>
                       </button>
                     )}
@@ -468,7 +468,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <span className="font-medium text-xs truncate">{t.moodTrends}</span>
                         </div>
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-blue-500/10 dark:bg-purple-500/15 text-[#1A73E8] dark:text-[#E8A33D] shrink-0 ml-2">
-                          Trends
+                          {t.trends}
                         </span>
                       </button>
                     )}
@@ -488,15 +488,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <div className="w-6 h-6 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                             <Calendar className="w-3.5 h-3.5" />
                           </div>
-                          <span className="font-medium text-xs truncate">Google Calendar</span>
+                          <span className="font-medium text-xs truncate">{t.googleCalendar}</span>
                         </div>
                         {user.isAnonymous ? (
                           <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-sm bg-amber-500/15 text-amber-700 dark:text-amber-300 shrink-0 ml-2 border border-amber-500/30">
-                            Google Sign-in
+                            {t.googleSignIn}
                           </span>
                         ) : (
                           <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0 ml-2">
-                            Schedule
+                            {t.schedule}
                           </span>
                         )}
                       </button>
@@ -506,7 +506,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                     {/* Section 2: Account & Settings */}
                     <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 px-2.5 pt-1 pb-0.5">
-                      Account & Security
+                      {t.accountAndSecurity}
                     </div>
 
                     {/* Settings (includes Help & Data Management) */}
@@ -526,7 +526,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <span className="font-medium text-xs truncate">{t.settings}</span>
                       </div>
                       <span className="text-[10px] text-gray-500 dark:text-gray-400 shrink-0 ml-2">
-                        Preferences
+                        {t.preferencesTag}
                       </span>
                     </button>
 
@@ -545,7 +545,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <div className="w-6 h-6 rounded-md bg-blue-500/10 dark:bg-amber-500/15 text-[#1A73E8] dark:text-[#E8A33D] flex items-center justify-center shrink-0">
                             <Lock className="w-3.5 h-3.5" />
                           </div>
-                          <span className="font-medium text-xs truncate">Lock Journal Now</span>
+                          <span className="font-medium text-xs truncate">{t.lockJournalNow}</span>
                         </div>
                         <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-blue-500/10 dark:bg-amber-500/15 text-[#1A73E8] dark:text-[#E8A33D] shrink-0 ml-2 border border-[#1A73E8]/20 dark:border-[#E8A33D]/20">
                           Alt+L
@@ -565,7 +565,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <div className="w-6 h-6 rounded-md theme-bg-subtle text-gray-500 flex items-center justify-center shrink-0">
                             <Lock className="w-3.5 h-3.5" />
                           </div>
-                          <span className="font-medium text-xs truncate">Lock Journal Now</span>
+                          <span className="font-medium text-xs truncate">{t.lockJournalNow}</span>
                         </div>
                         <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 ml-2 border border-amber-500/20">
                           Alt+L
